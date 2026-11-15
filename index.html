@@ -1,0 +1,2466 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TENET — LUNAR MISSION NAVIGATOR (v1.0)</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js r128 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            space: {
+              950: '#030811',
+              900: '#06101f',
+              850: '#09172b',
+              800: '#0d213d',
+            },
+            cyanGlow: '#00e5ff',
+            emeraldGlow: '#00ffa3',
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      background-color: #030811;
+      color: #e2f1ff;
+      font-family: 'Inter', sans-serif;
+      overflow-x: hidden;
+      background-image:
+        radial-gradient(circle at 50% 35%, rgba(0, 180, 255, 0.08) 0%, transparent 55%),
+        radial-gradient(circle at 12% 85%, rgba(0, 102, 255, 0.12) 0%, transparent 45%),
+        linear-gradient(180deg, #02060d 0%, #050d1a 100%);
+    }
+
+    /* Glassmorphic Mission Control Panels */
+    .hud-panel {
+      background: linear-gradient(160deg, rgba(10, 25, 47, 0.78) 0%, rgba(5, 14, 28, 0.88) 100%);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(0, 229, 255, 0.22);
+      box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.65),
+        inset 0 1px 0 rgba(125, 243, 255, 0.14);
+      border-radius: 14px;
+      position: relative;
+    }
+
+    .hud-panel::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 14px;
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(0, 229, 255, 0.35), rgba(0, 229, 255, 0.03) 45%, rgba(0, 229, 255, 0.2));
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+
+    .hud-glow-active {
+      border-color: rgba(0, 229, 255, 0.75) !important;
+      box-shadow:
+        0 0 22px rgba(0, 229, 255, 0.25),
+        inset 0 0 14px rgba(0, 229, 255, 0.14) !important;
+    }
+
+    .nav-pill-active {
+      background: linear-gradient(180deg, rgba(0, 229, 255, 0.22) 0%, rgba(0, 140, 200, 0.12) 100%);
+      border: 1px solid rgba(0, 229, 255, 0.75);
+      box-shadow: 0 0 16px rgba(0, 229, 255, 0.32), inset 0 0 8px rgba(0, 229, 255, 0.2);
+      color: #ffffff;
+    }
+
+    .side-btn-active {
+      background: linear-gradient(90deg, rgba(0, 229, 255, 0.24) 0%, rgba(0, 229, 255, 0.04) 100%);
+      border-left: 3px solid #00e5ff;
+      color: #00e5ff;
+      box-shadow: inset 0 0 12px rgba(0, 229, 255, 0.14);
+    }
+
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(4, 12, 24, 0.8);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(0, 229, 255, 0.3);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 229, 255, 0.6);
+    }
+
+    /* Range Slider Styling */
+    input[type='range'].tenet-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(0, 229, 255, 0.18);
+      height: 5px;
+      border-radius: 999px;
+      outline: none;
+    }
+    input[type='range'].tenet-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: #00e5ff;
+      cursor: pointer;
+      box-shadow: 0 0 12px #00e5ff, 0 0 4px #ffffff;
+      border: 2px solid #041020;
+    }
+
+    /* Subtle Scanline & Grid Overlay */
+    .bg-grid-pattern {
+      background-size: 36px 36px;
+      background-image:
+        linear-gradient(to right, rgba(0, 229, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0, 229, 255, 0.03) 1px, transparent 1px);
+    }
+
+    @keyframes pulseBeacon {
+      0%, 100% { transform: scale(1); opacity: 0.9; }
+      50% { transform: scale(1.22); opacity: 0.45; }
+    }
+    .beacon-ring {
+      animation: pulseBeacon 2.2s infinite ease-in-out;
+    }
+
+    /* ===== Deep Black / Frosted Liquid Glass Theme ===== */
+    :root {
+      color-scheme: dark;
+      --glass-fill: rgba(255,255,255,.045);
+      --glass-edge: rgba(255,255,255,.13);
+      --glass-highlight: rgba(255,255,255,.22);
+      --glass-shadow: 0 18px 55px rgba(0,0,0,.58);
+    }
+    body {
+      background-color: #030303 !important;
+      color: #f4f4f5 !important;
+      background-image:
+        radial-gradient(ellipse at 50% -10%, rgba(255,255,255,.055), transparent 48%),
+        radial-gradient(ellipse at 15% 85%, rgba(80,110,150,.055), transparent 42%),
+        linear-gradient(180deg,#020202 0%,#08090b 100%) !important;
+    }
+    .bg-grid-pattern {
+      background-image:
+        linear-gradient(to right,rgba(255,255,255,.018) 1px,transparent 1px),
+        linear-gradient(to bottom,rgba(255,255,255,.018) 1px,transparent 1px) !important;
+    }
+    .hud-panel {
+      background: linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.025) 55%,rgba(255,255,255,.045)) !important;
+      backdrop-filter: blur(24px) saturate(145%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(145%) !important;
+      border: 1px solid rgba(255,255,255,.105) !important;
+      border-radius: 20px !important;
+      box-shadow: 0 18px 55px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.12),inset 0 -1px 0 rgba(255,255,255,.025) !important;
+      overflow: hidden;
+    }
+    .hud-panel::before {
+      background: linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,.025) 42%,rgba(150,190,255,.09)) !important;
+      opacity: .5;
+    }
+    header, footer {
+      background: rgba(5,5,6,.72) !important;
+      border-color: rgba(255,255,255,.09) !important;
+      backdrop-filter: blur(28px) saturate(150%) !important;
+      -webkit-backdrop-filter: blur(28px) saturate(150%) !important;
+    }
+    .nav-pill-active {
+      background: linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,.055)) !important;
+      border: 1px solid rgba(255,255,255,.24) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.18),0 8px 25px rgba(0,0,0,.28) !important;
+      color: #fff !important;
+    }
+    .side-btn-active {
+      background: linear-gradient(90deg,rgba(255,255,255,.12),rgba(255,255,255,.025)) !important;
+      border-left-color: rgba(255,255,255,.8) !important;
+      color: #fff !important;
+      box-shadow: inset 0 0 18px rgba(255,255,255,.035) !important;
+    }
+    button, input, select, textarea {
+      transition: background .2s ease,border-color .2s ease,box-shadow .2s ease,transform .2s ease;
+    }
+    .hud-panel button:hover { transform: translateY(-1px); }
+    input,select,textarea {
+      background-color: rgba(255,255,255,.055) !important;
+      border-color: rgba(255,255,255,.14) !important;
+      color: #f4f4f5 !important;
+    }
+    ::-webkit-scrollbar-track { background: #050505 !important; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18) !important; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.3) !important; }
+    .hud-glow-active {
+      border-color: rgba(255,255,255,.35) !important;
+      box-shadow: 0 0 25px rgba(255,255,255,.07),inset 0 0 16px rgba(255,255,255,.035) !important;
+    }
+
+    /* ===== TENET reference-screen visual system ===== */
+    :root { color-scheme: dark; }
+    html, body { min-height:100%; background:#02060b !important; }
+    body {
+      color:#dceeff !important;
+      background:
+        radial-gradient(circle at 50% 46%, rgba(0,112,170,.12), transparent 38%),
+        radial-gradient(circle at 50% 50%, transparent 0 40%, rgba(0,0,0,.5) 100%),
+        radial-gradient(1px 1px at 8% 14%,rgba(190,225,255,.8) 50%,transparent 100%),
+        radial-gradient(1px 1px at 18% 78%,rgba(190,225,255,.7) 50%,transparent 100%),
+        radial-gradient(1px 1px at 78% 18%,rgba(190,225,255,.7) 50%,transparent 100%),
+        radial-gradient(1px 1px at 92% 62%,rgba(190,225,255,.8) 50%,transparent 100%),
+        radial-gradient(1px 1px at 65% 86%,rgba(190,225,255,.6) 50%,transparent 100%),
+        #02060b !important;
+      background-attachment:fixed !important;
+    }
+    .bg-grid-pattern { background-image:none !important; }
+    /* Panels become floating translucent HUD groups: no card outlines. */
+    .hud-panel {
+      background:rgba(1,8,17,.62) !important;
+      border:0 !important;
+      border-radius:12px !important;
+      box-shadow:0 10px 34px rgba(0,0,0,.34) !important;
+      -webkit-backdrop-filter:blur(7px) saturate(125%) !important;
+      backdrop-filter:blur(7px) saturate(125%) !important;
+      overflow:hidden;
+    }
+    .hud-panel::before { display:none !important; }
+    .hud-glow-active { border:0 !important; box-shadow:0 0 22px rgba(0,210,255,.2) !important; }
+    header, footer {
+      background:rgba(0,4,10,.78) !important;
+      border:0 !important;
+      box-shadow:none !important;
+      -webkit-backdrop-filter:blur(12px) !important;
+      backdrop-filter:blur(12px) !important;
+    }
+    .nav-pill-active {
+      background:linear-gradient(180deg,rgba(0,205,255,.24),rgba(0,105,170,.10)) !important;
+      border:1px solid rgba(0,207,255,.72) !important;
+      color:#dffaff !important;
+      box-shadow:0 0 18px rgba(0,190,255,.32),inset 0 0 10px rgba(0,190,255,.12) !important;
+    }
+    .top-nav-btn:not(.nav-pill-active) {
+      border-color:rgba(75,160,205,.16) !important;
+      background:rgba(0,10,22,.56) !important;
+      color:#a9c1d4 !important;
+    }
+    .side-btn-active {
+      background:linear-gradient(90deg,rgba(0,195,255,.28),rgba(0,140,220,.04)) !important;
+      border-left:3px solid #00d9ff !important;
+      color:#6ceaff !important;
+      box-shadow:inset 0 0 18px rgba(0,195,255,.12) !important;
+    }
+    .side-nav-btn { min-width:100%; }
+    #primaryDashboardGrid > div, #primaryDashboardGrid section,
+    main > .grid > section { min-width:0; }
+
+    /* Live Three.js lunar globe: full-screen backdrop with interactive pointer access */
+    #moon3dContainer {
+      position:fixed !important;
+      inset:0 !important;
+      width:100vw !important;
+      height:100vh !important;
+      z-index:0 !important;
+      opacity:.86;
+      pointer-events:auto !important;
+      cursor:grab;
+      touch-action:none;
+      transition: opacity 0.35s ease;
+    }
+    #moon3dContainer:active {
+      cursor:grabbing;
+    }
+    #moon3dContainer canvas { width:100% !important; height:100% !important; display:block; }
+    body > header { position:relative; z-index:30; }
+    body > main, body > footer { position:relative; z-index:2; }
+
+    /* Allow pointer events through transparent center dashboard wrapper so the 3D Moon can be dragged/clicked directly */
+    #primaryDashboardGrid > div:nth-child(2) {
+      background:transparent !important;
+      box-shadow:none !important;
+      backdrop-filter:none !important;
+      -webkit-backdrop-filter:none !important;
+      overflow:visible !important;
+      pointer-events:none;
+    }
+    #primaryDashboardGrid > div:nth-child(2) > div:first-child,
+    #primaryDashboardGrid > div:nth-child(2) > #floatingSiteCallout,
+    #primaryDashboardGrid > div:nth-child(2) > div:last-child {
+      pointer-events:auto;
+    }
+
+    #floatingSiteCallout {
+      background:rgba(0,8,18,.82) !important;
+      border:1px solid rgba(0,211,255,.65) !important;
+      box-shadow:0 0 25px rgba(0,190,255,.24) !important;
+    }
+    input, select, textarea {
+      background:rgba(0,9,19,.82) !important;
+      border-color:rgba(0,190,230,.22) !important;
+      color:#e5f8ff !important;
+    }
+    button { text-shadow:0 0 10px rgba(0,190,255,.12); }
+    ::-webkit-scrollbar-track { background:#02060b !important; }
+    ::-webkit-scrollbar-thumb { background:rgba(0,190,235,.3) !important; }
+
+    /* ===== FULL-SCREEN INTERACTIVE 3D MAP MODE (body.mode-3d-map) ===== */
+    body.mode-3d-map {
+      overflow: hidden !important;
+      height: 100vh !important;
+    }
+    body.mode-3d-map #moon3dContainer {
+      opacity: 1 !important;
+      z-index: 5 !important;
+      pointer-events: auto !important;
+    }
+    body.mode-3d-map main,
+    body.mode-3d-map footer {
+      display: none !important;
+    }
+    body.mode-3d-map #full3dHudBar {
+      display: flex !important;
+    }
+
+    @media (min-width:1024px) {
+      main { padding:10px 14px !important; gap:10px !important; }
+      #primaryDashboardGrid { gap:10px !important; }
+      main > .grid { gap:10px !important; }
+      #primaryDashboardGrid > div:nth-child(2) { min-height:510px !important; }
+    }
+    @media (max-width:1023px) {
+      #moon3dContainer { opacity:.45; }
+      header { position:sticky; }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-grid-pattern selection:bg-cyan-500/30 selection:text-cyan-100">
+
+  <!-- ==================== TOP HEADER BAR ==================== -->
+  <header class="w-full border-b border-cyan-500/20 bg-space-950/90 backdrop-blur-md px-3 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 z-30 sticky top-0">
+    <!-- Left: Brand Identity -->
+    <div class="flex items-center gap-3">
+      <!-- Custom SVG Orbital Logo -->
+      <div class="w-10 h-10 rounded-xl bg-cyan-950/70 border border-cyan-400/50 flex items-center justify-center shadow-[0_0_15px_rgba(0,229,255,0.35)] shrink-0">
+        <svg class="w-7 h-7 text-cyan-300" viewBox="0 0 36 36" fill="none">
+          <circle cx="18" cy="18" r="8" stroke="currentColor" stroke-width="1.6" fill="rgba(0,229,255,0.12)" />
+          <ellipse cx="18" cy="18" rx="15" ry="5.5" transform="rotate(-28 18 18)" stroke="#00e5ff" stroke-width="1.5" />
+          <circle cx="28" cy="12" r="2.2" fill="#00ffa3" />
+        </svg>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-xl sm:text-2xl font-bold tracking-[0.18em] text-white leading-none">TENET</span>
+          <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-400/30">v1.0</span>
+        </div>
+        <p class="text-[10px] sm:text-[11px] font-mono tracking-[0.22em] text-cyan-300/80 uppercase mt-0.5">Lunar Mission Navigator</p>
+      </div>
+    </div>
+
+    <!-- Center: Navigation Tabs -->
+    <nav class="flex items-center gap-1.5 sm:gap-2 overflow-x-auto max-w-full py-0.5" id="topNavTabs">
+      <button data-tab="mission-control" class="top-nav-btn nav-pill-active px-3 sm:px-4 py-1.5 rounded-xl text-xs font-medium flex items-center gap-2 transition whitespace-nowrap">
+        <svg class="w-3.5 h-3.5 text-cyan-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        Mission Control
+      </button>
+      <button data-tab="3d-map" class="top-nav-btn px-3 sm:px-4 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white border border-cyan-500/20 bg-space-900/60 hover:border-cyan-400/50 flex items-center gap-2 transition whitespace-nowrap">
+        <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"/></svg>
+        3D Map
+      </button>
+      <button data-tab="analysis" class="top-nav-btn px-3 sm:px-4 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white border border-cyan-500/20 bg-space-900/60 hover:border-cyan-400/50 flex items-center gap-2 transition whitespace-nowrap">
+        <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Analysis
+      </button>
+      <button data-tab="planning" class="top-nav-btn px-3 sm:px-4 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white border border-cyan-500/20 bg-space-900/60 hover:border-cyan-400/50 flex items-center gap-2 transition whitespace-nowrap">
+        <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        Planning
+      </button>
+      <button data-tab="resources" class="top-nav-btn px-3 sm:px-4 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white border border-cyan-500/20 bg-space-900/60 hover:border-cyan-400/50 flex items-center gap-2 transition whitespace-nowrap">
+        <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+        Resources
+      </button>
+    </nav>
+
+    <!-- Right: Lunar Time (LST), Date Picker, Systems Status -->
+    <div class="flex items-center gap-3 sm:gap-4">
+      <!-- Date Input for Launch Window Testing -->
+      <div class="hidden xl:flex flex-col items-end">
+        <label for="missionDateInput" class="text-[10px] font-mono uppercase tracking-wider text-cyan-300/70">Target Epoch (UTC)</label>
+        <input type="date" id="missionDateInput" value="2026-11-15" class="bg-space-900/90 border border-cyan-500/30 rounded-lg px-2 py-0.5 text-xs font-mono text-cyan-100 focus:outline-none focus:border-cyan-400" />
+      </div>
+
+      <!-- Live Lunar Time Display -->
+      <div class="text-right">
+        <div class="text-[10px] font-mono text-slate-400 tracking-wider">Lunar Time (LST)</div>
+        <div id="lstClock" class="text-sm sm:text-base font-mono font-bold text-white tracking-wider leading-tight">14:32:17</div>
+        <div id="lstDateLabel" class="text-[10px] font-mono text-cyan-300">Nov 15, 2026</div>
+      </div>
+
+      <!-- Systems Online Pill -->
+      <div class="hidden sm:flex flex-col items-center px-2.5 py-1 rounded-xl bg-emerald-950/40 border border-emerald-500/30">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399] animate-pulse"></span>
+        <span class="text-[10px] font-mono text-emerald-300 mt-0.5">Systems Online</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== FULL-SCREEN 3D GLOBE CANVAS (ALWAYS MOUNTED) ==================== -->
+  <div id="moon3dContainer" class="fixed inset-0 w-full h-full cursor-grab active:cursor-grabbing"></div>
+
+  <!-- ==================== SLEEK FLOATING HUD BAR FOR FULL-SCREEN 3D MAP MODE ==================== -->
+  <div id="full3dHudBar" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-30 w-[95vw] max-w-5xl flex-wrap items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-2xl bg-space-950/80 backdrop-blur-xl border border-cyan-400/40 shadow-[0_0_32px_rgba(0,229,255,0.22)]">
+    <!-- Active Target Readout -->
+    <div class="flex items-center gap-2.5 min-w-0">
+      <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#00ffa3] shrink-0"></span>
+      <div class="truncate">
+        <div class="flex items-center gap-2">
+          <span id="hud3dSiteName" class="text-xs sm:text-sm font-bold text-white truncate">Shackleton Rim</span>
+          <span id="hud3dScore" class="text-[11px] font-mono font-bold text-emerald-300 bg-emerald-500/15 px-1.5 py-0.2 rounded border border-emerald-400/30">97.6%</span>
+        </div>
+        <div id="hud3dCoords" class="text-[11px] font-mono text-cyan-200/90">89.6° S, 0.0° E · Drag 360° · Scroll Zoom · Click Surface</div>
+      </div>
+    </div>
+
+    <!-- Global Lunar Hemisphere & Pole Quick Camera Presets + Zoom -->
+    <div class="flex flex-wrap items-center gap-1.5">
+      <button data-cam-preset="south-pole" class="cam-preset-btn px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/35 border border-cyan-400/50 text-[11px] font-mono text-cyan-100 transition">South Pole</button>
+      <button data-cam-preset="near-side" class="cam-preset-btn px-2.5 py-1 rounded-lg bg-space-900/90 hover:bg-cyan-950 border border-cyan-500/30 text-[11px] font-mono text-slate-200 transition">Near Side</button>
+      <button data-cam-preset="far-side" class="cam-preset-btn px-2.5 py-1 rounded-lg bg-space-900/90 hover:bg-cyan-950 border border-cyan-500/30 text-[11px] font-mono text-slate-200 transition">Far Side</button>
+      <button data-cam-preset="north-pole" class="cam-preset-btn px-2.5 py-1 rounded-lg bg-space-900/90 hover:bg-cyan-950 border border-cyan-500/30 text-[11px] font-mono text-slate-200 transition">North Pole</button>
+
+      <div class="h-4 w-px bg-cyan-500/25 mx-0.5 hidden sm:block"></div>
+
+      <button id="btn3dZoomIn" class="w-7 h-7 rounded-lg bg-space-900/90 hover:bg-cyan-950 border border-cyan-500/40 text-cyan-200 font-bold flex items-center justify-center transition" title="Zoom In">+</button>
+      <button id="btn3dZoomOut" class="w-7 h-7 rounded-lg bg-space-900/90 hover:bg-cyan-950 border border-cyan-500/40 text-cyan-200 font-bold flex items-center justify-center transition" title="Zoom Out">−</button>
+
+      <button id="btnExit3dMap" class="ml-1 px-3 py-1 rounded-lg bg-cyan-500/25 hover:bg-cyan-500/40 border border-cyan-300/70 text-[11px] font-mono font-semibold text-white flex items-center gap-1.5 shadow-[0_0_14px_rgba(0,229,255,0.28)] transition">
+        <span>←</span> Mission Control
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== MAIN WORKSPACE ==================== -->
+  <main class="flex-1 w-full max-w-[1920px] mx-auto p-2.5 sm:p-4 flex flex-col gap-3">
+
+    <!-- PRIMARY 3-COLUMN MISSION CONTROL GRID -->
+    <div id="primaryDashboardGrid" class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch">
+
+      <!-- LEFT COLUMN: Navigation Rail + Mission Overview + Environment (3 cols on lg) -->
+      <div class="lg:col-span-3 flex flex-col sm:flex-row lg:flex-row gap-2.5">
+        <!-- Vertical Navigation Icon Rail -->
+        <aside class="hud-panel p-2 flex sm:flex-col justify-between items-center sm:w-20 lg:w-24 shrink-0 gap-1">
+          <div class="flex sm:flex-col gap-1.5 w-full justify-around sm:justify-start">
+            <button data-side="dashboard" class="side-nav-btn side-btn-active flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-medium transition gap-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+              <span>Dashboard</span>
+            </button>
+            <button data-side="sites" class="side-nav-btn flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-medium text-slate-400 hover:text-cyan-200 transition gap-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              <span>Landing Sites</span>
+            </button>
+            <button data-side="calculations" class="side-nav-btn flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-medium text-slate-400 hover:text-cyan-200 transition gap-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+              <span>Calculations</span>
+            </button>
+            <button data-side="advisor" class="side-nav-btn flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-medium text-slate-400 hover:text-cyan-200 transition gap-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+              <span>Advisor</span>
+            </button>
+            <button data-side="resources" class="side-nav-btn flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-medium text-slate-400 hover:text-cyan-200 transition gap-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+              <span>Data Sources</span>
+            </button>
+          </div>
+
+          <!-- Expert / Public Mode Switch -->
+          <div class="hidden sm:flex flex-col items-center pt-2 border-t border-cyan-500/20 w-full">
+            <span class="text-[9px] font-mono uppercase text-slate-400 mb-1">Telemetry</span>
+            <button id="expertModeToggle" class="px-2 py-1 rounded-lg bg-cyan-500/20 border border-cyan-400/50 text-[9px] font-mono text-cyan-200 hover:bg-cyan-500/30 transition w-full text-center">
+              EXPERT
+            </button>
+          </div>
+        </aside>
+
+        <!-- Mission Overview + Environment Stack -->
+        <div class="flex-1 flex flex-col gap-2.5">
+          <!-- MISSION OVERVIEW CARD -->
+          <section class="hud-panel p-3.5 flex flex-col justify-between">
+            <div class="flex items-center justify-between border-b border-cyan-500/20 pb-2 mb-2.5">
+              <h2 class="text-xs font-bold tracking-[0.14em] text-cyan-200 uppercase">Mission Overview</h2>
+              <span class="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30">ACTIVE</span>
+            </div>
+
+            <div class="flex items-center gap-3 mb-3">
+              <!-- Mini Moon Preview Badge -->
+              <div class="w-14 h-14 rounded-full bg-slate-900 border border-cyan-400/40 overflow-hidden relative shrink-0 shadow-[0_0_16px_rgba(0,229,255,0.2)]">
+                <svg viewBox="0 0 60 60" class="w-full h-full">
+                  <defs>
+                    <radialGradient id="miniMoonGrad" cx="35%" cy="35%" r="65%">
+                      <stop offset="0%" stop-color="#cbd5e1" />
+                      <stop offset="55%" stop-color="#64748b" />
+                      <stop offset="100%" stop-color="#0f172a" />
+                    </radialGradient>
+                  </defs>
+                  <circle cx="30" cy="30" r="28" fill="url(#miniMoonGrad)" />
+                  <circle cx="22" cy="20" r="5" fill="rgba(15,23,42,0.35)" />
+                  <circle cx="36" cy="26" r="7" fill="rgba(15,23,42,0.4)" />
+                  <circle cx="28" cy="42" r="4" fill="rgba(15,23,42,0.45)" />
+                  <line x1="30" y1="2" x2="30" y2="58" stroke="#00e5ff" stroke-dasharray="2 2" stroke-width="0.8" />
+                </svg>
+              </div>
+              <div class="space-y-1.5 text-xs">
+                <div>
+                  <div class="text-[10px] text-slate-400">Target Body</div>
+                  <div class="font-semibold text-cyan-300 text-sm">Moon (Luna)</div>
+                </div>
+                <div>
+                  <div class="text-[10px] text-slate-400">Mission Mode</div>
+                  <div id="missionModeLabel" class="font-semibold text-cyan-200">Autonomous CLPS</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="space-y-2.5 text-xs border-t border-cyan-500/15 pt-2.5">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-300 flex items-center gap-1.5">
+                  <span class="w-5 h-5 rounded-md bg-cyan-500/15 border border-cyan-400/30 flex items-center justify-center text-cyan-300 text-[11px]">📡</span>
+                  Distance to Moon
+                </span>
+                <span id="overviewDistance" class="font-mono font-semibold text-white">384,400 km</span>
+              </div>
+
+              <div class="flex items-center justify-between">
+                <span class="text-slate-300 flex items-center gap-1.5">
+                  <span class="w-5 h-5 rounded-md bg-cyan-500/15 border border-cyan-400/30 flex items-center justify-center text-cyan-300 text-[11px]">⏱️</span>
+                  Travel Time (Est.)
+                </span>
+                <span id="overviewTravelTime" class="font-mono font-semibold text-white">3.2 days</span>
+              </div>
+
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-slate-300 flex items-center gap-1.5">
+                    <span class="w-5 h-5 rounded-md bg-emerald-500/15 border border-emerald-400/30 flex items-center justify-center text-emerald-300 text-[11px]">🔋</span>
+                    Delta-V / Fuel Margin
+                  </span>
+                  <span id="overviewFuelText" class="font-mono font-semibold text-emerald-300">87%</span>
+                </div>
+                <div class="w-full h-2 rounded-full bg-slate-900 border border-cyan-500/20 overflow-hidden">
+                  <div id="overviewFuelBar" class="h-full bg-gradient-to-r from-cyan-400 to-emerald-400 rounded-full transition-all duration-300" style="width: 87%"></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ENVIRONMENT CARD -->
+          <section class="hud-panel p-3.5 flex-1 flex flex-col justify-between">
+            <div class="flex items-center justify-between border-b border-cyan-500/20 pb-2 mb-2">
+              <h2 class="text-xs font-bold tracking-[0.14em] text-cyan-200 uppercase">Environment</h2>
+              <span id="horizonStatusBadge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-400/30">CLEAR LOS</span>
+            </div>
+
+            <div class="space-y-2.5 text-xs">
+              <div class="flex items-center justify-between py-0.5">
+                <span class="text-slate-300 flex items-center gap-2">
+                  <span class="text-amber-400 text-sm">☀️</span> Sun Elevation
+                </span>
+                <span id="envSunElev" class="font-mono font-bold text-amber-300 text-sm">+12.4°</span>
+              </div>
+
+              <div class="flex items-center justify-between py-0.5">
+                <span class="text-slate-300 flex items-center gap-2">
+                  <span class="text-sky-400 text-sm">🌍</span> Earth Elevation
+                </span>
+                <span id="envEarthElev" class="font-mono font-bold text-sky-300 text-sm">+8.6°</span>
+              </div>
+
+              <div class="flex items-center justify-between py-0.5">
+                <span class="text-slate-300 flex items-center gap-2">
+                  <span class="text-yellow-300 text-sm">⚡</span> Lunar Day Sunlight
+                </span>
+                <span id="envSunlightPct" class="font-mono font-bold text-white text-sm">86%</span>
+              </div>
+
+              <div class="flex items-center justify-between py-0.5">
+                <span class="text-slate-300 flex items-center gap-2">
+                  <span class="text-cyan-400 text-sm">📶</span> Earth Visibility
+                </span>
+                <span id="envEarthVisPct" class="font-mono font-bold text-cyan-300 text-sm">92%</span>
+              </div>
+
+              <!-- Countdowns to Sunset / Earthset -->
+              <div class="pt-2 border-t border-cyan-500/15 grid grid-cols-2 gap-2 text-[11px]">
+                <div class="bg-space-950/70 rounded-lg p-2 border border-amber-500/20">
+                  <div class="text-[9px] font-mono text-amber-300/80 uppercase">Next Sunset</div>
+                  <div id="sunsetCountdown" class="font-mono font-semibold text-white mt-0.5">11d 14h</div>
+                </div>
+                <div class="bg-space-950/70 rounded-lg p-2 border border-sky-500/20">
+                  <div class="text-[9px] font-mono text-sky-300/80 uppercase">DTE Window</div>
+                  <div id="earthsetCountdown" class="font-mono font-semibold text-white mt-0.5">14d 06h</div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- CENTER COLUMN: Interactive 3D Moon Viewport HUD Overlays (6 cols on lg) -->
+      <div class="lg:col-span-6 hud-panel p-2.5 flex flex-col justify-between min-h-[430px] sm:min-h-[500px] relative overflow-hidden">
+        <!-- Top Overlay Bar inside 3D Viewport -->
+        <div class="flex flex-wrap items-center justify-between gap-2 z-10 px-1.5 pt-0.5">
+          <!-- Lunar Mapping Live Connection Status -->
+          <div class="flex items-center gap-2 bg-space-950/80 border border-cyan-500/30 rounded-xl px-2.5 py-1 text-[11px] font-mono">
+            <span id="nasaTileDot" class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+            <span id="nasaTileStatus" class="text-cyan-200">Lunar Mapping WMTS: Syncing...</span>
+          </div>
+
+          <!-- Custom Latitude / Longitude Coordinate Input -->
+          <form id="customCoordForm" class="flex items-center gap-1.5 bg-space-950/85 border border-cyan-500/30 rounded-xl px-2 py-1">
+            <span class="text-[10px] font-mono text-cyan-300 uppercase">Target:</span>
+            <input type="number" step="0.1" min="-90" max="90" id="inputLat" value="-89.6" class="w-16 bg-space-900 border border-cyan-500/30 rounded px-1.5 py-0.5 text-[11px] font-mono text-white focus:outline-none focus:border-cyan-400" title="Latitude (-90 to +90)" />
+            <input type="number" step="0.1" min="-180" max="180" id="inputLon" value="0.0" class="w-16 bg-space-900 border border-cyan-500/30 rounded px-1.5 py-0.5 text-[11px] font-mono text-white focus:outline-none focus:border-cyan-400" title="Longitude (-180 to +180)" />
+            <button type="submit" class="px-2 py-0.5 rounded bg-cyan-500/25 hover:bg-cyan-500/40 border border-cyan-400/50 text-[10px] font-mono font-semibold text-cyan-100 transition">
+              GO
+            </button>
+          </form>
+        </div>
+
+        <!-- Floating Active Landing Site Callout Overlay -->
+        <div id="floatingSiteCallout" class="z-10 self-center sm:self-end sm:mr-6 mt-auto mb-3 bg-space-950/85 backdrop-blur-md border border-cyan-400/70 rounded-xl px-3.5 py-2 shadow-[0_0_24px_rgba(0,229,255,0.3)] pointer-events-auto transition-all">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_10px_#00e5ff]"></span>
+            <span id="calloutSiteName" class="text-sm font-bold text-white tracking-wide">Shackleton Crater Rim</span>
+          </div>
+          <div id="calloutCoords" class="text-xs font-mono text-cyan-200 mt-0.5">89.6° S, 0.0° E</div>
+          <div class="text-xs font-mono mt-0.5">
+            <span class="text-slate-300">Viability Score: </span>
+            <span id="calloutScore" class="font-bold text-emerald-400">97.6%</span>
+          </div>
+        </div>
+
+        <!-- Bottom Left Camera Controls (+, -, Focus South Pole, Full 3D Map Shortcut) -->
+        <div class="z-10 flex items-center justify-between gap-2 px-1.5 pb-0.5">
+          <div class="flex items-center gap-1.5">
+            <button id="btnZoomIn" class="w-8 h-8 rounded-lg bg-space-950/85 hover:bg-cyan-950 border border-cyan-500/40 text-cyan-200 font-bold flex items-center justify-center transition" title="Zoom In">+</button>
+            <button id="btnZoomOut" class="w-8 h-8 rounded-lg bg-space-950/85 hover:bg-cyan-950 border border-cyan-500/40 text-cyan-200 font-bold flex items-center justify-center transition" title="Zoom Out">−</button>
+            <button id="btnFocusPole" class="px-2.5 h-8 rounded-lg bg-space-950/85 hover:bg-cyan-950 border border-cyan-500/40 text-cyan-200 text-[11px] font-mono flex items-center gap-1.5 transition" title="Focus Lunar South Pole">
+              <span>◎</span> South Pole
+            </button>
+          </div>
+
+          <button id="btnExpand3dHint" class="flex items-center gap-1.5 bg-space-950/85 hover:bg-cyan-950/90 border border-cyan-500/30 hover:border-cyan-400/60 rounded-lg px-2.5 py-1 text-[10px] font-mono text-cyan-200 transition">
+            <span>⛶</span> Click globe or open Full 3D Map
+          </button>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN: Real-Time Telemetry + Illumination Timeline (3 cols on lg) -->
+      <div class="lg:col-span-3 flex flex-col gap-2.5">
+        <!-- REAL-TIME TELEMETRY CARD -->
+        <section class="hud-panel p-3.5">
+          <div class="flex items-center justify-between border-b border-cyan-500/20 pb-2 mb-2.5">
+            <h2 class="text-xs font-bold tracking-[0.14em] text-cyan-200 uppercase flex items-center gap-1.5">
+              <span class="text-cyan-400">〰️</span> Real-Time Telemetry
+            </h2>
+            <span class="text-[10px] font-mono text-cyan-400">LOLA DEM</span>
+          </div>
+
+          <div class="space-y-2 text-xs">
+            <div class="flex items-center justify-between">
+              <span class="text-slate-300">Earth–Moon Dist.</span>
+              <span id="telAltitude" class="font-mono font-semibold text-cyan-300">384,400 km</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-slate-300">Orbital Velocity</span>
+              <span id="telVelocity" class="font-mono font-semibold text-cyan-300">1.022 km/s</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-slate-300">Latitude / Longitude</span>
+              <span id="telLatLon" class="font-mono font-semibold text-white">89.6° S, 0.0° E</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-slate-300">LOLA Terrain Elev.</span>
+              <span id="telElevation" class="font-mono font-semibold text-emerald-300">+1,420 m</span>
+            </div>
+          </div>
+
+          <!-- Local Terrain Relief Sparkline (360° Horizon Mask Profile) -->
+          <div class="mt-3 pt-2 border-t border-cyan-500/15">
+            <div class="flex items-center justify-between text-[10px] font-mono text-slate-400 mb-1">
+              <span>360° HORIZON TERRAIN MASK</span>
+              <span id="horizonPeakLabel" class="text-cyan-300">Max Rim: +2.8°</span>
+            </div>
+            <div class="w-full h-16 bg-space-950/85 rounded-lg border border-cyan-500/20 p-1 relative overflow-hidden">
+              <svg id="horizonSparklineSvg" viewBox="0 0 360 60" preserveAspectRatio="none" class="w-full h-full"></svg>
+            </div>
+          </div>
+        </section>
+
+        <!-- LUNAR DAY / 24H ILLUMINATION & EARTH VISIBILITY TIMELINE -->
+        <section class="hud-panel p-3.5 flex-1 flex flex-col justify-between">
+          <div class="flex items-center justify-between border-b border-cyan-500/20 pb-2 mb-2">
+            <h2 class="text-xs font-bold tracking-[0.14em] text-cyan-200 uppercase flex items-center gap-1.5">
+              <span class="text-amber-400">☀️</span> Illumination Timeline
+            </h2>
+            <span id="timelinePeakBadge" class="text-[10px] font-mono text-amber-300">Peak: +14.8°</span>
+          </div>
+
+          <!-- Interactive SVG Sun & Earth Elevation Chart -->
+          <div class="w-full flex-1 min-h-[155px] bg-space-950/85 rounded-xl border border-cyan-500/25 p-2 relative">
+            <svg id="illuminationChartSvg" viewBox="0 0 320 150" class="w-full h-full overflow-visible"></svg>
+          </div>
+
+          <!-- Legend -->
+          <div class="flex items-center justify-between text-[10px] font-mono text-slate-300 mt-2 pt-1.5 border-t border-cyan-500/15">
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-0.5 bg-amber-400 inline-block"></span> Sun Elev</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-0.5 bg-cyan-400 inline-block"></span> Earth Elev</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-0.5 bg-rose-400/80 border-b border-dashed border-rose-400 inline-block"></span> Rim Mask</span>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ==================== BOTTOM 3-COLUMN DECK ==================== -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch">
+
+      <!-- 1. SITE COMPARISON CARDS (4 cols on lg) -->
+      <section class="lg:col-span-4 hud-panel p-3.5 flex flex-col justify-between">
+        <div class="flex items-center justify-between mb-2.5">
+          <h2 class="text-xs font-bold tracking-[0.14em] text-cyan-200 uppercase flex items-center gap-1.5">
+            <span class="text-cyan-400">🛰️</span> Site Comparison
+          </h2>
+          <button id="btnViewAllSites" class="text-xs font-mono text-cyan-300 hover:text-white flex items-center gap-1 transition">
+            View All <span>→</span>
+          </button>
+        </div>
+
+        <div id="siteComparisonCards" class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <!-- Dynamically populated candidate site cards -->
+        </div>
+      </section>
+
+      <!-- 2. MISSION ADVISOR & FEASIBILITY SCORE (4 cols on lg) -->
+      <section class="lg:col-span-4 hud-panel p-3.5 flex items-center justify-between gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-1.5 mb-1.5">
+            <span class="text-cyan-400 text-sm">🧭</span>
+            <h2 class="text-xs font-bold tracking-[0.14em] text-cyan-200 uppercase">Mission Advisor</h2>
+          </div>
+
+          <div class="flex items-start gap-2">
+            <span id="advisorStatusIcon" class="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-400 text-emerald-300 flex items-center justify-center text-xs shrink-0 mt-0.5">✓</span>
+            <div>
+              <h3 id="advisorHeadline" class="text-xs sm:text-sm font-bold text-emerald-300 leading-snug">
+                Shackleton Rim is an optimal landing site.
+              </h3>
+              <p id="advisorSummary" class="text-[11px] text-slate-300 mt-1 leading-relaxed line-clamp-2">
+                Sustained solar illumination above local crater rim and uninterrupted direct-to-Earth line of sight.
+              </p>
+            </div>
+          </div>
+
+          <div class="mt-2.5 flex items-center gap-2">
+            <button id="btnAdvisorDetails" class="px-3 py-1 rounded-full bg-cyan-500/15 hover:bg-cyan-500/30 border border-cyan-400/60 text-[11px] font-medium text-cyan-200 flex items-center gap-1.5 transition">
+              View Details <span>→</span>
+            </button>
+            <button id="btnTestDelay" class="px-2.5 py-1 rounded-full bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/40 text-[11px] font-mono text-amber-200 transition" title="Simulate a 14-day launch delay">
+              +14d Delay Test
+            </button>
+          </div>
+        </div>
+
+        <!-- Circular Overall Viability Gauge -->
+        <div class="relative w-24 h-24 shrink-0 flex items-center justify-center">
+          <svg class="w-full h-full -rotate-90" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="40" stroke="rgba(0,229,255,0.15)" stroke-width="8" fill="none" />
+            <circle id="advisorScoreCircle" cx="50" cy="50" r="40" stroke="url(#scoreGrad)" stroke-width="8" stroke-linecap="round" fill="none" stroke-dasharray="251.2" stroke-dashoffset="6" class="transition-all duration-500" />
+            <defs>
+              <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#00e5ff" />
+                <stop offset="100%" stop-color="#00ffa3" />
+              </linearGradient>
+            </defs>
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+            <span id="advisorScoreValue" class="text-base font-mono font-bold text-white">97.6%</span>
+            <span class="text-[9px] text-slate-400 uppercase tracking-wider">Overall Score</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. SIMULATION CONTROLS & 3D WIREFRAME TERRAIN MESH (4 cols on lg) -->
+      <section class="lg:col-span-4 hud-panel p-3.5 flex items-center justify-between gap-3">
+        <div class="flex-1 flex flex-col justify-between h-full">
+          <div class="flex items-center justify-between mb-1.5">
+            <h2 class="text-xs font-bold tracking-[0.14em] text-cyan-200 uppercase flex items-center gap-1.5">
+              <span class="text-cyan-400">⚙️</span> Simulation Controls
+            </h2>
+            <span id="simPhaseLabel" class="text-[10px] font-mono text-cyan-300">Day 14.8 / 29.5d</span>
+          </div>
+
+          <!-- Transport Buttons -->
+          <div class="flex items-center justify-center gap-2 my-1">
+            <button id="btnSimRewind" class="w-9 h-8 rounded-lg bg-space-900 hover:bg-cyan-950 border border-cyan-500/35 text-cyan-200 flex items-center justify-center transition" title="Step Backward (-6h)">
+              ⏮
+            </button>
+            <button id="btnSimPlayPause" class="w-11 h-8 rounded-lg bg-cyan-500/25 hover:bg-cyan-500/40 border border-cyan-400 text-white flex items-center justify-center shadow-[0_0_12px_rgba(0,229,255,0.3)] transition" title="Play / Pause Lunar Cycle">
+              ▶
+            </button>
+            <button id="btnSimForward" class="w-9 h-8 rounded-lg bg-space-900 hover:bg-cyan-950 border border-cyan-500/35 text-cyan-200 flex items-center justify-center transition" title="Step Forward (+6h)">
+              ⏭
+            </button>
+          </div>
+
+          <!-- Synodic Lunar Day Scrubber -->
+          <div class="my-1.5">
+            <input type="range" id="lunarCycleSlider" min="0" max="708" step="1" value="354" class="w-full tenet-slider" />
+          </div>
+
+          <!-- Time Speed Selector -->
+          <div class="flex items-center justify-between gap-2">
+            <label for="simSpeedSelect" class="text-[10px] font-mono text-slate-400">Time Speed:</label>
+            <select id="simSpeedSelect" class="bg-space-950 border border-cyan-500/35 rounded-lg px-2 py-1 text-[11px] font-mono text-cyan-200 focus:outline-none focus:border-cyan-400">
+              <option value="1">1x (Real-Time)</option>
+              <option value="600">600x (10m / sec)</option>
+              <option value="3600" selected>3600x (1h / sec)</option>
+              <option value="21600">21600x (6h / sec)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Mini 3D DEM Wireframe Topography Preview -->
+        <div class="w-28 sm:w-36 h-28 rounded-xl bg-space-950/90 border border-cyan-500/30 overflow-hidden relative shrink-0">
+          <canvas id="demWireframeCanvas" class="w-full h-full block"></canvas>
+          <span class="absolute bottom-1 left-1.5 text-[8px] font-mono text-cyan-300/80 bg-space-950/75 px-1 rounded">LOLA DEM 3D</span>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- ==================== FOOTER BAR ==================== -->
+  <footer class="w-full border-t border-cyan-500/20 bg-space-950/90 px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+    <div class="flex items-center gap-2.5">
+      <span>Powered by <strong class="text-cyan-200 font-medium">Lunar Mapping WMTS</strong> · LRO WAC Mosaic · LOLA DEM Topography · JPL Horizons Ephemeris</span>
+    </div>
+    <div class="hidden md:flex items-center gap-4 font-mono tracking-[0.25em] text-cyan-300/80 text-[10px]">
+      <span>EXPLORE</span>
+      <span>•</span>
+      <span>PLAN</span>
+      <span>•</span>
+      <span>LAND</span>
+    </div>
+    <div class="font-mono text-cyan-300/80">TENET v1.0</div>
+  </footer>
+
+  <!-- ==================== MODAL OVERLAYS (SITE COMPARISON / ADVISOR DETAILS / RESOURCES) ==================== -->
+  <div id="modalBackdrop" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="hud-panel max-w-4xl w-full max-h-[88vh] flex flex-col overflow-hidden border-cyan-400/50">
+      <div class="flex items-center justify-between px-5 py-3.5 border-b border-cyan-500/25">
+        <h3 id="modalTitle" class="text-sm sm:text-base font-bold tracking-wider text-white uppercase">Mission Analysis</h3>
+        <button id="btnCloseModal" class="w-8 h-8 rounded-lg bg-space-900 hover:bg-rose-950/60 border border-cyan-500/30 text-slate-300 hover:text-white flex items-center justify-center transition">✕</button>
+      </div>
+      <div id="modalBody" class="p-5 overflow-y-auto space-y-4 text-xs sm:text-sm text-slate-200">
+        <!-- Injected dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== APPLICATION LOGIC & SELENOCENTRIC EPHEMERIS ENGINE ==================== -->
+  <script>
+    (function () {
+      'use strict';
+
+      // =========================================================================
+      // 1. CURATED LUNAR LANDING SITES & LOLA TERRAIN HORIZON PROFILES
+      // =========================================================================
+      const LANDING_SITES = [
+        {
+          id: 'shackleton',
+          name: 'Shackleton Rim',
+          shortName: 'Shackleton',
+          region: 'South Pole — Connecting Ridge',
+          lat: -89.6,
+          lon: 0.0,
+          elevationM: 1420,
+          slopeDeg: 4.2,
+          iceProximityKm: 1.8,
+          horizonMask: [1.2, 1.5, 2.1, 1.8, 0.9, 0.5, 0.4, 0.8, 1.6, 2.4, 2.8, 1.7],
+          missionTag: 'Artemis III Candidate',
+          notes: 'Peak of near-eternal light along the Shackleton-de Gerlache ridge; adjacent to permanently shadowed regions (PSRs) rich in water ice.'
+        },
+        {
+          id: 'cabeus',
+          name: 'Cabeus Rim North',
+          shortName: 'Cabeus',
+          region: 'South Polar Region (84.9° S)',
+          lat: -84.9,
+          lon: -35.5,
+          elevationM: 980,
+          slopeDeg: 3.8,
+          iceProximityKm: 3.2,
+          horizonMask: [0.8, 1.1, 1.4, 1.2, 0.7, 0.6, 0.9, 1.5, 2.1, 1.9, 1.3, 0.9],
+          missionTag: 'LCROSS Impact Zone',
+          notes: 'High direct-to-Earth visibility due to lower south latitude; confirmed hydroxyl and water-ice signatures in adjacent Cabeus floor.'
+        },
+        {
+          id: 'malapert',
+          name: 'Malapert Massif',
+          shortName: 'Malapert',
+          region: 'South Pole — Mons Malapert',
+          lat: -86.0,
+          lon: 0.0,
+          elevationM: 4850,
+          slopeDeg: 6.1,
+          iceProximityKm: 12.4,
+          horizonMask: [-0.8, -0.5, 0.2, 0.6, 0.1, -0.9, -1.2, -0.6, 0.4, 0.9, 0.3, -0.4],
+          missionTag: 'Prime Comms Relay Peak',
+          notes: '5 km high massif providing negative local horizon angles and unobstructed line-of-sight to Earth for continuous DTE telemetry.'
+        },
+        {
+          id: 'haworth',
+          name: 'Haworth Rim',
+          shortName: 'Haworth',
+          region: 'South Pole — Haworth Massif',
+          lat: -87.5,
+          lon: -5.2,
+          elevationM: 2110,
+          slopeDeg: 5.4,
+          iceProximityKm: 2.5,
+          horizonMask: [1.6, 2.2, 2.9, 2.4, 1.5, 1.1, 1.3, 1.9, 2.7, 3.2, 2.5, 1.8],
+          missionTag: 'CLPS Volatile Target',
+          notes: 'Elevated ridge overlooking Haworth PSR; requires careful solar array tracking to clear neighboring massif ridges.'
+        },
+        {
+          id: 'nobile',
+          name: 'Nobile Rim 1',
+          shortName: 'Nobile Rim',
+          region: 'South Pole — Nobile Crater',
+          lat: -85.2,
+          lon: 53.5,
+          elevationM: 1640,
+          slopeDeg: 4.9,
+          iceProximityKm: 4.1,
+          horizonMask: [1.1, 1.4, 1.9, 2.5, 2.1, 1.3, 0.8, 1.0, 1.7, 2.2, 1.8, 1.2],
+          missionTag: 'VIPER / CLPS Study',
+          notes: 'Broad gentle slopes ideal for rover traverse into shallow cold traps with balanced power and thermal stability.'
+        },
+        {
+          id: 'shivshakti',
+          name: 'Shiv Shakti Point',
+          shortName: 'Chandrayaan-3',
+          region: 'Manzinus–Boguslawsky Plain',
+          lat: -69.37,
+          lon: 32.32,
+          elevationM: -410,
+          slopeDeg: 2.1,
+          iceProximityKm: 48.0,
+          horizonMask: [0.4, 0.6, 0.9, 0.7, 0.5, 0.3, 0.4, 0.8, 1.1, 0.9, 0.6, 0.5],
+          missionTag: 'ISRO Vikram Lander',
+          notes: 'Historic first soft landing in the lunar south polar region; high solar elevation angle (~20° peak) ensures rapid battery charging.'
+        }
+      ];
+
+      // =========================================================================
+      // 2. APPLICATION STATE
+      // =========================================================================
+      const state = {
+        selectedSiteId: 'shackleton',
+        customSite: null,
+        baseDate: new Date('2026-11-15T14:32:17Z'),
+        simOffsetHours: 140,
+        isPlaying: false,
+        simSpeed: 3600,
+        expertMode: true,
+        activeTab: 'mission-control',
+        is3dMapMode: false,
+        nasaTilesLoaded: false,
+      };
+
+      const SYNODIC_DAYS = 29.530589;
+      const SYNODIC_HOURS = SYNODIC_DAYS * 24;
+
+      function getActiveSite() {
+        if (state.customSite) return state.customSite;
+        return LANDING_SITES.find((s) => s.id === state.selectedSiteId) || LANDING_SITES[0];
+      }
+
+      function getCurrentSimDate() {
+        return new Date(state.baseDate.getTime() + state.simOffsetHours * 3600 * 1000);
+      }
+
+      // =========================================================================
+      // 3. SELENOCENTRIC EPHEMERIS & TERRAIN-AWARE VISIBILITY ENGINE
+      // =========================================================================
+      function computeSiteTelemetry(site, simDate) {
+        const deg2rad = Math.PI / 180;
+        const rad2deg = 180 / Math.PI;
+
+        const jd = simDate.getTime() / 86400000 + 2440587.5;
+        const d = jd - 2451545.0;
+
+        const synodicPhase = ((d / 29.530588853) % 1 + 1) % 1;
+        const subsolarLon = ((180 - synodicPhase * 360 + 540) % 360) - 180;
+
+        const draconicAngle = (218.32 + 13.176396 * d) * deg2rad;
+        const subsolarLat = 1.5424 * Math.sin(draconicAngle);
+
+        const anomalisticAngle = (134.96 + 13.064993 * d) * deg2rad;
+        const nodicalAngle = (93.27 + 13.229350 * d) * deg2rad;
+
+        const earthSubLat = 6.68 * Math.sin(nodicalAngle);
+        const earthSubLon = 7.89 * Math.sin(anomalisticAngle);
+
+        const earthMoonDistanceKm = Math.round(384400 * (1 - 0.0549 * Math.cos(anomalisticAngle)));
+        const orbitalVelocityKms = (Math.sqrt(398600.4 * (2 / earthMoonDistanceKm - 1 / 384400))).toFixed(3);
+
+        const latR = site.lat * deg2rad;
+        const lonR = site.lon * deg2rad;
+        const sLatR = subsolarLat * deg2rad;
+        const sLonR = subsolarLon * deg2rad;
+        const dLonSun = sLonR - lonR;
+
+        const sinSunElev =
+          Math.sin(latR) * Math.sin(sLatR) +
+          Math.cos(latR) * Math.cos(sLatR) * Math.cos(dLonSun);
+        const sunElevation = Math.asin(Math.max(-1, Math.min(1, sinSunElev))) * rad2deg;
+
+        const sunAzimuth =
+          ((Math.atan2(
+            Math.sin(dLonSun) * Math.cos(sLatR),
+            Math.cos(latR) * Math.sin(sLatR) - Math.sin(latR) * Math.cos(sLatR) * Math.cos(dLonSun)
+          ) *
+            rad2deg) +
+            360) %
+          360;
+
+        const eLatR = earthSubLat * deg2rad;
+        const eLonR = earthSubLon * deg2rad;
+        const dLonEarth = eLonR - lonR;
+
+        const sinEarthElev =
+          Math.sin(latR) * Math.sin(eLatR) +
+          Math.cos(latR) * Math.cos(eLatR) * Math.cos(dLonEarth);
+        const earthElevation = Math.asin(Math.max(-1, Math.min(1, sinEarthElev))) * rad2deg;
+
+        const earthAzimuth =
+          ((Math.atan2(
+            Math.sin(dLonEarth) * Math.cos(eLatR),
+            Math.cos(latR) * Math.sin(eLatR) - Math.sin(latR) * Math.cos(eLatR) * Math.cos(dLonEarth)
+          ) *
+            rad2deg) +
+            360) %
+          360;
+
+        const sunHorizonAngle = getHorizonMaskAtAzimuth(site.horizonMask, sunAzimuth);
+        const earthHorizonAngle = getHorizonMaskAtAzimuth(site.horizonMask, earthAzimuth);
+
+        const sunVisible = sunElevation > sunHorizonAngle;
+        const earthVisible = earthElevation > earthHorizonAngle;
+
+        const curveSamples = [];
+        let sunlitSamples = 0;
+        let earthVisSamples = 0;
+        let maxSunElev = -90;
+        let hoursToSunset = null;
+        let hoursToEarthset = null;
+
+        const steps = 72;
+        const stepHours = SYNODIC_HOURS / steps;
+
+        for (let i = 0; i <= steps; i++) {
+          const tOffsetH = i * stepHours;
+          const sampleDate = new Date(simDate.getTime() + tOffsetH * 3600 * 1000);
+          const sJd = sampleDate.getTime() / 86400000 + 2440587.5;
+          const sD = sJd - 2451545.0;
+
+          const sPhase = ((sD / 29.530588853) % 1 + 1) % 1;
+          const sLon = (((180 - sPhase * 360 + 540) % 360) - 180) * deg2rad;
+          const sLat = 1.5424 * Math.sin((218.32 + 13.176396 * sD) * deg2rad) * deg2rad;
+          const dLS = sLon - lonR;
+
+          const sEl =
+            Math.asin(
+              Math.max(
+                -1,
+                Math.min(1, Math.sin(latR) * Math.sin(sLat) + Math.cos(latR) * Math.cos(sLat) * Math.cos(dLS))
+              )
+            ) * rad2deg;
+          const sAz =
+            ((Math.atan2(
+              Math.sin(dLS) * Math.cos(sLat),
+              Math.cos(latR) * Math.sin(sLat) - Math.sin(latR) * Math.cos(sLat) * Math.cos(dLS)
+            ) *
+              rad2deg) +
+              360) %
+            360;
+
+          const eAnom = (134.96 + 13.064993 * sD) * deg2rad;
+          const eNod = (93.27 + 13.229350 * sD) * deg2rad;
+          const eLat = 6.68 * Math.sin(eNod) * deg2rad;
+          const eLon = 7.89 * Math.sin(eAnom) * deg2rad;
+          const dLE = eLon - lonR;
+
+          const eEl =
+            Math.asin(
+              Math.max(
+                -1,
+                Math.min(1, Math.sin(latR) * Math.sin(eLat) + Math.cos(latR) * Math.cos(eLat) * Math.cos(dLE))
+              )
+            ) * rad2deg;
+          const eAz =
+            ((Math.atan2(
+              Math.sin(dLE) * Math.cos(eLat),
+              Math.cos(latR) * Math.sin(eLat) - Math.sin(latR) * Math.cos(eLat) * Math.cos(dLE)
+            ) *
+              rad2deg) +
+              360) %
+            360;
+
+          const maskS = getHorizonMaskAtAzimuth(site.horizonMask, sAz);
+          const maskE = getHorizonMaskAtAzimuth(site.horizonMask, eAz);
+
+          if (i < steps) {
+            if (sEl > maskS) sunlitSamples++;
+            if (eEl > maskE) earthVisSamples++;
+          }
+          if (sEl > maxSunElev) maxSunElev = sEl;
+
+          if (i > 0 && hoursToSunset === null && sunVisible && sEl <= maskS) {
+            hoursToSunset = tOffsetH;
+          }
+          if (i > 0 && hoursToEarthset === null && earthVisible && eEl <= maskE) {
+            hoursToEarthset = tOffsetH;
+          }
+
+          curveSamples.push({
+            hourOffset: tOffsetH,
+            sunElev: sEl,
+            earthElev: eEl,
+            horizonMask: maskS,
+          });
+        }
+
+        const sunlightPct = Math.round((sunlitSamples / steps) * 100);
+        const earthVisPct = Math.round((earthVisSamples / steps) * 100);
+
+        const slopeScore = Math.max(0, Math.min(100, 100 - site.slopeDeg * 4.2));
+        const iceScore = Math.max(35, Math.min(100, 100 - site.iceProximityKm * 1.1));
+        const rawScore =
+          sunlightPct * 0.42 +
+          earthVisPct * 0.33 +
+          slopeScore * 0.15 +
+          iceScore * 0.10;
+        const viabilityScore = Math.min(99.4, Math.max(12.0, rawScore)).toFixed(1);
+
+        return {
+          subsolarLat,
+          subsolarLon,
+          earthSubLat,
+          earthSubLon,
+          earthMoonDistanceKm,
+          orbitalVelocityKms,
+          sunElevation,
+          sunAzimuth,
+          sunHorizonAngle,
+          sunVisible,
+          earthElevation,
+          earthAzimuth,
+          earthHorizonAngle,
+          earthVisible,
+          sunlightPct,
+          earthVisPct,
+          maxSunElev,
+          hoursToSunset,
+          hoursToEarthset,
+          curveSamples,
+          viabilityScore: parseFloat(viabilityScore),
+        };
+      }
+
+      function getHorizonMaskAtAzimuth(maskArray, azDeg) {
+        const idxFloat = ((azDeg % 360) / 360) * maskArray.length;
+        const idx0 = Math.floor(idxFloat) % maskArray.length;
+        const idx1 = (idx0 + 1) % maskArray.length;
+        const frac = idxFloat - Math.floor(idxFloat);
+        return maskArray[idx0] * (1 - frac) + maskArray[idx1] * frac;
+      }
+
+      function formatDurationHours(hours) {
+        if (hours === null) return 'Continuous (>29d)';
+        if (hours <= 0) return 'Below Horizon';
+        const d = Math.floor(hours / 24);
+        const h = Math.round(hours % 24);
+        return `${d}d ${String(h).padStart(2, '0')}h`;
+      }
+
+      function formatCoords(lat, lon) {
+        const latDir = lat >= 0 ? 'N' : 'S';
+        const lonDir = lon >= 0 ? 'E' : 'W';
+        return `${Math.abs(lat).toFixed(1)}° ${latDir}, ${Math.abs(lon).toFixed(1)}° ${lonDir}`;
+      }
+
+      // =========================================================================
+      // 4. THREE.JS 3D INTERACTIVE MOON WITH LUNAR MAPPING WMTS TILES & LOLA DEM
+      // =========================================================================
+      let scene, camera, renderer, moonMesh, sunLight, earthMesh, siteBeaconGroup, ringGroup;
+      let isDraggingGlobe = false;
+      let prevPointer = { x: 0, y: 0 };
+      let targetCameraSpherical = { radius: 4.6, theta: 0.15, phi: 2.35 };
+      let currentCameraSpherical = { radius: 4.6, theta: 0.15, phi: 2.35 };
+      const beaconMeshes = [];
+
+      function initThreeJsMoon() {
+        const container = document.getElementById('moon3dContainer');
+        const width = container.clientWidth || window.innerWidth;
+        const height = container.clientHeight || window.innerHeight;
+
+        scene = new THREE.Scene();
+
+        camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
+        updateCameraPositionFromSpherical();
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(width, height);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.18;
+        container.appendChild(renderer.domElement);
+
+        // Starfield Background
+        const starGeo = new THREE.BufferGeometry();
+        const starCount = 1800;
+        const starPositions = new Float32Array(starCount * 3);
+        for (let i = 0; i < starCount * 3; i += 3) {
+          const r = 24 + Math.random() * 25;
+          const u = Math.random();
+          const v = Math.random();
+          const theta = 2 * Math.PI * u;
+          const phi = Math.acos(2 * v - 1);
+          starPositions[i] = r * Math.sin(phi) * Math.cos(theta);
+          starPositions[i + 1] = r * Math.cos(phi);
+          starPositions[i + 2] = r * Math.sin(phi) * Math.sin(theta);
+        }
+        starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        const starMat = new THREE.PointsMaterial({ color: 0xbbe8ff, size: 0.08, transparent: true, opacity: 0.78 });
+        scene.add(new THREE.Points(starGeo, starMat));
+
+        // Lighting: Directional Sunlight + subtle Earthshine ambient fill so night side remains readable
+        sunLight = new THREE.DirectionalLight(0xffffff, 2.35);
+        sunLight.position.set(5, 0.5, 4);
+        scene.add(sunLight);
+
+        const earthShineAmbient = new THREE.AmbientLight(0x284b7a, 0.44);
+        scene.add(earthShineAmbient);
+
+        const rimBackLight = new THREE.DirectionalLight(0x00b8ff, 0.35);
+        rimBackLight.position.set(-4, -3, -4);
+        scene.add(rimBackLight);
+
+        // Build High-Resolution Procedural LRO/LOLA Base Canvas + Bump Canvas
+        const albedoCanvas = document.createElement('canvas');
+        albedoCanvas.width = 1024;
+        albedoCanvas.height = 512;
+        const bumpCanvas = document.createElement('canvas');
+        bumpCanvas.width = 1024;
+        bumpCanvas.height = 512;
+
+        generateProceduralLunarMaps(albedoCanvas, bumpCanvas);
+
+        const moonTexture = new THREE.CanvasTexture(albedoCanvas);
+        const bumpTexture = new THREE.CanvasTexture(bumpCanvas);
+
+        // Composite real Lunar Mapping WMTS tiles (Zoom Level 2: 8 cols x 4 rows)
+        loadNasaMoonTrekTiles(albedoCanvas, moonTexture);
+
+        const moonGeometry = new THREE.SphereGeometry(1, 96, 96);
+        const moonMaterial = new THREE.MeshStandardMaterial({
+          map: moonTexture,
+          bumpMap: bumpTexture,
+          bumpScale: 0.025,
+          roughness: 0.92,
+          metalness: 0.04,
+        });
+
+        moonMesh = new THREE.Mesh(moonGeometry, moonMaterial);
+        scene.add(moonMesh);
+
+        // Subtle Cyan Atmosphere/Grid Halo & Orbital Trajectory Rings
+        ringGroup = new THREE.Group();
+        const eqRingGeo = new THREE.RingGeometry(1.36, 1.368, 128);
+        const eqRingMat = new THREE.MeshBasicMaterial({
+          color: 0x00e5ff,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.35,
+        });
+        const orbitRing1 = new THREE.Mesh(eqRingGeo, eqRingMat);
+        orbitRing1.rotation.x = Math.PI / 2.25;
+        orbitRing1.rotation.y = 0.22;
+        ringGroup.add(orbitRing1);
+
+        const polarRingGeo = new THREE.RingGeometry(1.48, 1.486, 128);
+        const polarRingMat = new THREE.MeshBasicMaterial({
+          color: 0x38bdf8,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.22,
+        });
+        const orbitRing2 = new THREE.Mesh(polarRingGeo, polarRingMat);
+        orbitRing2.rotation.x = Math.PI / 3.1;
+        orbitRing2.rotation.y = -0.35;
+        ringGroup.add(orbitRing2);
+        scene.add(ringGroup);
+
+        // Distant 3D Earth Sphere in Background
+        const earthCanvas = document.createElement('canvas');
+        earthCanvas.width = 256;
+        earthCanvas.height = 128;
+        paintProceduralEarth(earthCanvas);
+        const earthTex = new THREE.CanvasTexture(earthCanvas);
+        const earthGeo = new THREE.SphereGeometry(0.28, 32, 32);
+        const earthMat = new THREE.MeshStandardMaterial({
+          map: earthTex,
+          roughness: 0.6,
+          emissive: 0x07264a,
+          emissiveIntensity: 0.45,
+        });
+        earthMesh = new THREE.Mesh(earthGeo, earthMat);
+        earthMesh.position.set(2.4, 1.45, -3.5);
+        scene.add(earthMesh);
+
+        // Landing Site Interactive 3D Beacons
+        siteBeaconGroup = new THREE.Group();
+        scene.add(siteBeaconGroup);
+        rebuildSiteBeacons();
+
+        // Pointer & Touch Orbit/Zoom/Click Interactions
+        setupGlobeInteractions(container);
+
+        // Resize Handler
+        window.addEventListener('resize', () => {
+          if (!container || !renderer || !camera) return;
+          const w = container.clientWidth || window.innerWidth;
+          const h = container.clientHeight || window.innerHeight;
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+          renderer.setSize(w, h);
+        });
+      }
+
+      function loadNasaMoonTrekTiles(targetCanvas, threeTexture) {
+        const ctx = targetCanvas.getContext('2d');
+        const statusEl = document.getElementById('nasaTileStatus');
+        const dotEl = document.getElementById('nasaTileDot');
+
+        const zoom = 2;
+        const cols = 8;
+        const rows = 4;
+        const tileW = targetCanvas.width / cols;
+        const tileH = targetCanvas.height / rows;
+
+        let loadedCount = 0;
+        let errorCount = 0;
+        const totalTiles = cols * rows;
+
+        for (let y = 0; y < rows; y++) {
+          for (let x = 0; x < cols; x++) {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.src = `https://trek.nasa.gov/tiles/Moon/EQ/LRO_WAC_Mosaic_Global_303ppd_v02/1.0.0/default/default028mm/${zoom}/${y}/${x}.jpg`;
+
+            img.onload = () => {
+              ctx.drawImage(img, x * tileW, y * tileH, tileW, tileH);
+              threeTexture.needsUpdate = true;
+              loadedCount++;
+              if (loadedCount === 1) {
+                state.nasaTilesLoaded = true;
+                statusEl.textContent = 'Lunar Mapping WMTS: Connected (LRO WAC)';
+                dotEl.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]';
+              }
+            };
+
+            img.onerror = () => {
+              errorCount++;
+              if (errorCount === totalTiles && loadedCount === 0) {
+                statusEl.textContent = 'LOLA/WAC DEM Synthesis Active';
+                dotEl.className = 'w-2 h-2 rounded-full bg-cyan-400';
+              }
+            };
+          }
+        }
+      }
+
+      function generateProceduralLunarMaps(albedoCanvas, bumpCanvas) {
+        const aCtx = albedoCanvas.getContext('2d');
+        const bCtx = bumpCanvas.getContext('2d');
+        const w = albedoCanvas.width;
+        const h = albedoCanvas.height;
+
+        aCtx.fillStyle = '#8b929a';
+        aCtx.fillRect(0, 0, w, h);
+        bCtx.fillStyle = '#808080';
+        bCtx.fillRect(0, 0, w, h);
+
+        const maria = [
+          { x: 0.36, y: 0.34, rx: 0.13, ry: 0.16, rot: 0.2 },
+          { x: 0.45, y: 0.28, rx: 0.09, ry: 0.08, rot: -0.1 },
+          { x: 0.56, y: 0.36, rx: 0.08, ry: 0.07, rot: 0.3 },
+          { x: 0.62, y: 0.42, rx: 0.07, ry: 0.06, rot: -0.2 },
+          { x: 0.48, y: 0.44, rx: 0.09, ry: 0.07, rot: 0.1 },
+        ];
+
+        maria.forEach((m) => {
+          aCtx.save();
+          aCtx.translate(m.x * w, m.y * h);
+          aCtx.rotate(m.rot);
+          const grad = aCtx.createRadialGradient(0, 0, 4, 0, 0, m.rx * w);
+          grad.addColorStop(0, 'rgba(42, 47, 54, 0.85)');
+          grad.addColorStop(0.7, 'rgba(56, 62, 70, 0.65)');
+          grad.addColorStop(1, 'rgba(139, 146, 154, 0)');
+          aCtx.fillStyle = grad;
+          aCtx.beginPath();
+          aCtx.ellipse(0, 0, m.rx * w, m.ry * h, 0, 0, Math.PI * 2);
+          aCtx.fill();
+          aCtx.restore();
+        });
+
+        let seed = 4219;
+        function rand() {
+          seed = (seed * 16807) % 2147483647;
+          return (seed - 1) / 2147483646;
+        }
+
+        for (let i = 0; i < 650; i++) {
+          const cx = rand() * w;
+          const cy = i < 240 ? (0.68 + rand() * 0.31) * h : rand() * h;
+          const r = (i < 60 ? 12 + rand() * 24 : 2 + rand() * 11);
+
+          const cGrad = aCtx.createRadialGradient(cx, cy, r * 0.1, cx, cy, r);
+          cGrad.addColorStop(0, 'rgba(58, 63, 70, 0.65)');
+          cGrad.addColorStop(0.78, 'rgba(85, 91, 99, 0.45)');
+          cGrad.addColorStop(0.92, 'rgba(195, 203, 212, 0.65)');
+          cGrad.addColorStop(1, 'rgba(139, 146, 154, 0)');
+          aCtx.fillStyle = cGrad;
+          aCtx.beginPath();
+          aCtx.arc(cx, cy, r, 0, Math.PI * 2);
+          aCtx.fill();
+
+          const bGrad = bCtx.createRadialGradient(cx, cy, r * 0.1, cx, cy, r);
+          bGrad.addColorStop(0, 'rgba(30, 30, 30, 0.85)');
+          bGrad.addColorStop(0.75, 'rgba(70, 70, 70, 0.6)');
+          bGrad.addColorStop(0.9, 'rgba(235, 235, 235, 0.85)');
+          bGrad.addColorStop(1, 'rgba(128, 128, 128, 0)');
+          bCtx.fillStyle = bGrad;
+          bCtx.beginPath();
+          bCtx.arc(cx, cy, r, 0, Math.PI * 2);
+          bCtx.fill();
+        }
+
+        const rayCenters = [
+          { x: 0.46 * w, y: 0.74 * h, len: 120 },
+          { x: 0.50 * w, y: 0.96 * h, len: 95 },
+        ];
+        rayCenters.forEach((rc) => {
+          aCtx.strokeStyle = 'rgba(215, 224, 235, 0.24)';
+          aCtx.lineWidth = 1.2;
+          for (let k = 0; k < 22; k++) {
+            const ang = (k / 22) * Math.PI * 2;
+            aCtx.beginPath();
+            aCtx.moveTo(rc.x, rc.y);
+            aCtx.lineTo(rc.x + Math.cos(ang) * rc.len, rc.y + Math.sin(ang) * rc.len * 0.55);
+            aCtx.stroke();
+          }
+        });
+      }
+
+      function paintProceduralEarth(canvas) {
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width;
+        const h = canvas.height;
+        const grad = ctx.createLinearGradient(0, 0, w, h);
+        grad.addColorStop(0, '#0a3d91');
+        grad.addColorStop(0.5, '#1d6ce0');
+        grad.addColorStop(1, '#072459');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.fillStyle = 'rgba(56, 178, 115, 0.65)';
+        ctx.beginPath();
+        ctx.ellipse(w * 0.35, h * 0.42, 34, 22, 0.3, 0, Math.PI * 2);
+        ctx.ellipse(w * 0.65, h * 0.52, 42, 26, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.48)';
+        for (let i = 0; i < 14; i++) {
+          ctx.beginPath();
+          ctx.ellipse((i * 23) % w, ((i * 19) % (h - 20)) + 10, 26, 4.5, 0.15, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function latLonToVector3(latDeg, lonDeg, radius = 1.015) {
+        const phi = ((90 - latDeg) * Math.PI) / 180;
+        const theta = ((lonDeg + 180) * Math.PI) / 180;
+        const x = -radius * Math.sin(phi) * Math.cos(theta);
+        const y = radius * Math.cos(phi);
+        const z = radius * Math.sin(phi) * Math.sin(theta);
+        return new THREE.Vector3(x, y, z);
+      }
+
+      function vector3ToLatLon(vec) {
+        const n = vec.clone().normalize();
+        const lat = 90 - (Math.acos(Math.max(-1, Math.min(1, n.y))) * 180) / Math.PI;
+        let lon = (Math.atan2(n.z, -n.x) * 180) / Math.PI - 180;
+        if (lon < -180) lon += 360;
+        if (lon > 180) lon -= 360;
+        return { lat: parseFloat(lat.toFixed(2)), lon: parseFloat(lon.toFixed(2)) };
+      }
+
+      function rebuildSiteBeacons() {
+        while (siteBeaconGroup.children.length > 0) {
+          siteBeaconGroup.remove(siteBeaconGroup.children[0]);
+        }
+        beaconMeshes.length = 0;
+
+        const allSites = state.customSite ? [...LANDING_SITES, state.customSite] : LANDING_SITES;
+        const active = getActiveSite();
+
+        allSites.forEach((site) => {
+          const isSelected = site.id === active.id;
+          const pos = latLonToVector3(site.lat, site.lon, 1.014);
+
+          const group = new THREE.Group();
+          group.position.copy(pos);
+          group.lookAt(0, 0, 0);
+
+          const dotGeo = new THREE.SphereGeometry(isSelected ? 0.024 : 0.015, 16, 16);
+          const dotMat = new THREE.MeshBasicMaterial({
+            color: isSelected ? 0x00ffa3 : 0x00e5ff,
+          });
+          const dot = new THREE.Mesh(dotGeo, dotMat);
+          group.add(dot);
+
+          const ringGeo = new THREE.RingGeometry(isSelected ? 0.036 : 0.022, isSelected ? 0.048 : 0.029, 32);
+          const ringMat = new THREE.MeshBasicMaterial({
+            color: isSelected ? 0x00e5ff : 0x38bdf8,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: isSelected ? 0.95 : 0.65,
+          });
+          const ring = new THREE.Mesh(ringGeo, ringMat);
+          group.add(ring);
+
+          dot.userData = { siteId: site.id };
+          beaconMeshes.push(dot);
+          siteBeaconGroup.add(group);
+        });
+      }
+
+      function updateCameraPositionFromSpherical() {
+        if (!camera) return;
+        const { radius, theta, phi } = currentCameraSpherical;
+        camera.position.x = radius * Math.sin(phi) * Math.sin(theta);
+        camera.position.y = radius * Math.cos(phi);
+        camera.position.z = radius * Math.sin(phi) * Math.cos(theta);
+        camera.lookAt(0, 0, 0);
+      }
+
+      function setupGlobeInteractions(container) {
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        let downPos = { x: 0, y: 0 };
+
+        container.addEventListener('pointerdown', (e) => {
+          isDraggingGlobe = true;
+          prevPointer = { x: e.clientX, y: e.clientY };
+          downPos = { x: e.clientX, y: e.clientY };
+        });
+
+        window.addEventListener('pointermove', (e) => {
+          if (!isDraggingGlobe) return;
+          const dx = e.clientX - prevPointer.x;
+          const dy = e.clientY - prevPointer.y;
+          prevPointer = { x: e.clientX, y: e.clientY };
+
+          targetCameraSpherical.theta -= dx * 0.0065;
+          targetCameraSpherical.phi = Math.max(
+            0.12,
+            Math.min(Math.PI - 0.12, targetCameraSpherical.phi - dy * 0.0065)
+          );
+        });
+
+        window.addEventListener('pointerup', (e) => {
+          if (!isDraggingGlobe) return;
+          isDraggingGlobe = false;
+
+          const moveDist = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
+          if (moveDist < 5 && e.target === renderer.domElement) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(pointer, camera);
+
+            const beaconHits = raycaster.intersectObjects(beaconMeshes);
+            if (beaconHits.length > 0) {
+              const hitSiteId = beaconHits[0].object.userData.siteId;
+              selectLandingSite(hitSiteId);
+              return;
+            }
+
+            const moonHits = raycaster.intersectObject(moonMesh);
+            if (moonHits.length > 0) {
+              const coords = vector3ToLatLon(moonHits[0].point);
+              setCustomLandingCoordinates(coords.lat, coords.lon);
+            }
+          }
+        });
+
+        container.addEventListener(
+          'wheel',
+          (e) => {
+            e.preventDefault();
+            targetCameraSpherical.radius = Math.max(
+              1.45,
+              Math.min(6.5, targetCameraSpherical.radius + e.deltaY * 0.0018)
+            );
+          },
+          { passive: false }
+        );
+      }
+
+      function focusCameraOnSite(site) {
+        const phi = ((90 - site.lat) * Math.PI) / 180;
+        const theta = ((site.lon + 90) * Math.PI) / 180;
+        targetCameraSpherical.phi = Math.max(0.18, Math.min(Math.PI - 0.18, phi));
+        targetCameraSpherical.theta = theta;
+      }
+
+      // =========================================================================
+      // 5. MODE SWITCHING: FULL-SCREEN 3D MAP VS MISSION CONTROL DASHBOARD
+      // =========================================================================
+      function setActiveTopTabPill(tabName) {
+        document.querySelectorAll('.top-nav-btn').forEach((b) => {
+          b.classList.remove('nav-pill-active', 'text-white');
+          b.classList.add('text-slate-300');
+          if (b.dataset.tab === tabName) {
+            b.classList.add('nav-pill-active', 'text-white');
+            b.classList.remove('text-slate-300');
+          }
+        });
+      }
+
+      function enterFull3dMapMode() {
+        state.is3dMapMode = true;
+        state.activeTab = '3d-map';
+        document.body.classList.add('mode-3d-map');
+        setActiveTopTabPill('3d-map');
+        targetCameraSpherical.radius = Math.min(targetCameraSpherical.radius, 2.55);
+      }
+
+      function exitFull3dMapMode() {
+        state.is3dMapMode = false;
+        state.activeTab = 'mission-control';
+        document.body.classList.remove('mode-3d-map');
+        setActiveTopTabPill('mission-control');
+      }
+
+      // =========================================================================
+      // 6. MINI 3D LOLA DEM WIREFRAME MESH (BOTTOM RIGHT PANEL)
+      // =========================================================================
+      let wireCtx, wireCanvas;
+      let wirePhase = 0;
+
+      function initWireframeTerrain() {
+        wireCanvas = document.getElementById('demWireframeCanvas');
+        wireCtx = wireCanvas.getContext('2d');
+      }
+
+      function renderWireframeTerrain(site) {
+        if (!wireCtx || !wireCanvas || state.is3dMapMode) return;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const w = wireCanvas.clientWidth || 140;
+        const h = wireCanvas.clientHeight || 112;
+        if (wireCanvas.width !== w * dpr || wireCanvas.height !== h * dpr) {
+          wireCanvas.width = w * dpr;
+          wireCanvas.height = h * dpr;
+        }
+
+        wireCtx.save();
+        wireCtx.scale(dpr, dpr);
+        wireCtx.clearRect(0, 0, w, h);
+
+        const cols = 18;
+        const rows = 14;
+        const slopeFactor = site.slopeDeg / 5;
+        wirePhase += 0.015;
+
+        for (let r = 0; r < rows; r++) {
+          wireCtx.beginPath();
+          for (let c = 0; c < cols; c++) {
+            const nx = c / (cols - 1) - 0.5;
+            const ny = r / (rows - 1) - 0.5;
+            const distFromCenter = Math.hypot(nx, ny);
+            const rimHeight =
+              Math.exp(-Math.pow((distFromCenter - 0.28) * 6.5, 2)) * 18 * slopeFactor -
+              Math.exp(-Math.pow(distFromCenter * 5.5, 2)) * 12 * slopeFactor +
+              Math.sin(nx * 9 + wirePhase) * 2.5;
+
+            const isoX = w * 0.5 + (nx - ny) * (w * 0.58);
+            const isoY = h * 0.56 + (nx + ny) * (h * 0.34) - rimHeight;
+
+            if (c === 0) wireCtx.moveTo(isoX, isoY);
+            else wireCtx.lineTo(isoX, isoY);
+          }
+          const alpha = 0.25 + (r / rows) * 0.65;
+          wireCtx.strokeStyle = `rgba(0, 229, 255, ${alpha.toFixed(2)})`;
+          wireCtx.lineWidth = 1;
+          wireCtx.stroke();
+        }
+        wireCtx.restore();
+      }
+
+      // =========================================================================
+      // 7. SVG CHARTS: 360° HORIZON PROFILE & ILLUMINATION / EARTH VISIBILITY CURVE
+      // =========================================================================
+      function renderHorizonSparkline(site, telemetry) {
+        const svg = document.getElementById('horizonSparklineSvg');
+        const mask = site.horizonMask;
+        const maxMask = Math.max(...mask);
+        document.getElementById('horizonPeakLabel').textContent = `Max Rim: ${maxMask >= 0 ? '+' : ''}${maxMask.toFixed(1)}°`;
+
+        const mapY = (deg) => 54 - ((deg + 3) / 9) * 48;
+
+        let pathD = `M 0 60 `;
+        let lineD = '';
+        for (let i = 0; i <= mask.length; i++) {
+          const x = (i / mask.length) * 360;
+          const deg = mask[i % mask.length];
+          const y = Math.max(4, Math.min(56, mapY(deg)));
+          pathD += `L ${x.toFixed(1)} ${y.toFixed(1)} `;
+          lineD += (i === 0 ? 'M ' : 'L ') + `${x.toFixed(1)} ${y.toFixed(1)} `;
+        }
+        pathD += `L 360 60 Z`;
+
+        const sunX = (telemetry.sunAzimuth / 360) * 360;
+        const sunY = Math.max(5, Math.min(55, mapY(telemetry.sunElevation)));
+        const earthX = (telemetry.earthAzimuth / 360) * 360;
+        const earthY = Math.max(5, Math.min(55, mapY(telemetry.earthElevation)));
+
+        svg.innerHTML = `
+          <defs>
+            <linearGradient id="terrainFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="rgba(0, 229, 255, 0.38)" />
+              <stop offset="100%" stop-color="rgba(0, 229, 255, 0.04)" />
+            </linearGradient>
+          </defs>
+          <line x1="0" y1="${mapY(0).toFixed(1)}" x2="360" y2="${mapY(0).toFixed(1)}" stroke="rgba(148,163,184,0.25)" stroke-dasharray="3 3" stroke-width="1" />
+          <path d="${pathD}" fill="url(#terrainFill)" />
+          <path d="${lineD}" fill="none" stroke="#00e5ff" stroke-width="1.6" />
+          <circle cx="${earthX.toFixed(1)}" cy="${earthY.toFixed(1)}" r="3.5" fill="#38bdf8" stroke="#ffffff" stroke-width="1" />
+          <circle cx="${sunX.toFixed(1)}" cy="${sunY.toFixed(1)}" r="4" fill="#fbbf24" stroke="#ffffff" stroke-width="1" />
+        `;
+      }
+
+      function renderIlluminationChart(site, telemetry) {
+        const svg = document.getElementById('illuminationChartSvg');
+        const samples = telemetry.curveSamples;
+        const padL = 28;
+        const padR = 10;
+        const padT = 16;
+        const padB = 20;
+        const plotW = 320 - padL - padR;
+        const plotH = 150 - padT - padB;
+
+        const minDeg = -15;
+        const maxDeg = Math.max(30, Math.ceil(telemetry.maxSunElev / 10) * 10 + 5);
+
+        const toX = (idx) => padL + (idx / (samples.length - 1)) * plotW;
+        const toY = (deg) => {
+          const clamped = Math.max(minDeg, Math.min(maxDeg, deg));
+          return padT + plotH - ((clamped - minDeg) / (maxDeg - minDeg)) * plotH;
+        };
+
+        let sunPath = '';
+        let sunArea = `M ${padL} ${toY(0).toFixed(1)} `;
+        let earthPath = '';
+        let maskPath = '';
+
+        let peakIdx = 0;
+        samples.forEach((pt, idx) => {
+          const x = toX(idx).toFixed(1);
+          const yS = toY(pt.sunElev).toFixed(1);
+          const yE = toY(pt.earthElev).toFixed(1);
+          const yM = toY(pt.horizonMask).toFixed(1);
+
+          sunPath += (idx === 0 ? 'M ' : 'L ') + `${x} ${yS} `;
+          sunArea += `L ${x} ${yS} `;
+          earthPath += (idx === 0 ? 'M ' : 'L ') + `${x} ${yE} `;
+          maskPath += (idx === 0 ? 'M ' : 'L ') + `${x} ${yM} `;
+
+          if (pt.sunElev > samples[peakIdx].sunElev) peakIdx = idx;
+        });
+        sunArea += `L ${(padL + plotW).toFixed(1)} ${toY(0).toFixed(1)} Z`;
+
+        const peakX = toX(peakIdx).toFixed(1);
+        const peakY = toY(samples[peakIdx].sunElev).toFixed(1);
+        const zeroY = toY(0).toFixed(1);
+
+        document.getElementById('timelinePeakBadge').textContent = `Peak: ${telemetry.maxSunElev >= 0 ? '+' : ''}${telemetry.maxSunElev.toFixed(1)}°`;
+
+        svg.innerHTML = `
+          <defs>
+            <linearGradient id="sunAreaGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="rgba(251, 191, 36, 0.34)" />
+              <stop offset="100%" stop-color="rgba(251, 191, 36, 0.0)" />
+            </linearGradient>
+          </defs>
+
+          <line x1="${padL}" y1="${padT}" x2="${padL + plotW}" y2="${padT}" stroke="rgba(148,163,184,0.15)" stroke-width="1" />
+          <line x1="${padL}" y1="${zeroY}" x2="${padL + plotW}" y2="${zeroY}" stroke="rgba(255,255,255,0.28)" stroke-width="1" />
+          <line x1="${padL}" y1="${padT + plotH}" x2="${padL + plotW}" y2="${padT + plotH}" stroke="rgba(148,163,184,0.15)" stroke-width="1" />
+
+          <text x="2" y="${padT + 4}" fill="#94a3b8" font-size="8" font-family="JetBrains Mono">+${maxDeg}°</text>
+          <text x="8" y="${parseFloat(zeroY) + 3}" fill="#cbd5e1" font-size="8" font-family="JetBrains Mono">0°</text>
+          <text x="2" y="${padT + plotH}" fill="#94a3b8" font-size="8" font-family="JetBrains Mono">${minDeg}°</text>
+
+          <text x="${padL}" y="145" fill="#94a3b8" font-size="8" font-family="JetBrains Mono">Now</text>
+          <text x="${padL + plotW * 0.25 - 8}" y="145" fill="#94a3b8" font-size="8" font-family="JetBrains Mono">+7d</text>
+          <text x="${padL + plotW * 0.5 - 10}" y="145" fill="#94a3b8" font-size="8" font-family="JetBrains Mono">+14.8d</text>
+          <text x="${padL + plotW * 0.75 - 10}" y="145" fill="#94a3b8" font-size="8" font-family="JetBrains Mono">+22d</text>
+          <text x="${padL + plotW - 24}" y="145" fill="#94a3b8" font-size="8" font-family="JetBrains Mono">+29.5d</text>
+
+          <path d="${maskPath}" fill="none" stroke="rgba(251, 113, 133, 0.75)" stroke-width="1.2" stroke-dasharray="3 2" />
+          <path d="${earthPath}" fill="none" stroke="#00e5ff" stroke-width="1.8" />
+          <path d="${sunArea}" fill="url(#sunAreaGrad)" />
+          <path d="${sunPath}" fill="none" stroke="#fbbf24" stroke-width="2" />
+
+          <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + plotH}" stroke="#00ffa3" stroke-width="1.5" />
+          <circle cx="${padL}" cy="${toY(telemetry.sunElevation).toFixed(1)}" r="3.5" fill="#fbbf24" stroke="#030811" stroke-width="1.2" />
+
+          <circle cx="${peakX}" cy="${peakY}" r="3" fill="#fbbf24" />
+          <text x="${Math.min(235, Math.max(padL + 6, parseFloat(peakX) - 24))}" y="${Math.max(11, parseFloat(peakY) - 6)}" fill="#fde047" font-size="8.5" font-weight="600" font-family="JetBrains Mono">
+            Max: ${telemetry.maxSunElev.toFixed(1)}°
+          </text>
+        `;
+      }
+
+      // =========================================================================
+      // 8. UI UPDATE & SITE COMPARISON CARDS
+      // =========================================================================
+      function renderSiteComparisonCards(simDate) {
+        const container = document.getElementById('siteComparisonCards');
+        const active = getActiveSite();
+        const topSites = LANDING_SITES.slice(0, 4);
+
+        container.innerHTML = topSites
+          .map((site, idx) => {
+            const tel = computeSiteTelemetry(site, simDate);
+            const isSelected = site.id === active.id;
+            const segments = Math.round(tel.viabilityScore / 25);
+
+            return `
+              <button data-site-id="${site.id}" class="site-card-btn text-left rounded-xl p-2 border transition flex flex-col justify-between bg-space-950/75 hover:bg-space-900/90 ${
+                isSelected ? 'hud-glow-active' : 'border-cyan-500/20 hover:border-cyan-400/50'
+              }">
+                <div class="w-full h-12 rounded-lg bg-slate-900 border border-cyan-500/20 overflow-hidden relative mb-1.5">
+                  <svg viewBox="0 0 100 48" class="w-full h-full">
+                    <defs>
+                      <radialGradient id="craterThumb${idx}" cx="50%" cy="55%" r="55%">
+                        <stop offset="0%" stop-color="#0f172a" />
+                        <stop offset="65%" stop-color="#475569" />
+                        <stop offset="85%" stop-color="#94a3b8" />
+                        <stop offset="100%" stop-color="#1e293b" />
+                      </radialGradient>
+                    </defs>
+                    <rect width="100" height="48" fill="#1e293b" />
+                    <ellipse cx="50" cy="26" rx="${32 - idx * 3}" ry="${16 - idx}" fill="url(#craterThumb${idx})" />
+                    <circle cx="50" cy="14" r="2.2" fill="${isSelected ? '#00ffa3' : '#00e5ff'}" />
+                  </svg>
+                  ${
+                    idx === 0
+                      ? '<span class="absolute top-1 right-1 text-[9px] text-amber-300">★</span>'
+                      : ''
+                  }
+                </div>
+
+                <div>
+                  <div class="text-[11px] font-semibold text-white truncate">${site.shortName}</div>
+                  <div class="text-xs font-mono font-bold ${
+                    tel.viabilityScore >= 85 ? 'text-cyan-300' : 'text-amber-300'
+                  }">${tel.viabilityScore.toFixed(1)}%</div>
+                </div>
+
+                <div class="grid grid-cols-4 gap-1 mt-1.5">
+                  ${[1, 2, 3, 4]
+                    .map(
+                      (bar) =>
+                        `<span class="h-1 rounded-full ${
+                          bar <= segments ? 'bg-cyan-400 shadow-[0_0_6px_#00e5ff]' : 'bg-slate-800'
+                        }"></span>`
+                    )
+                    .join('')}
+                </div>
+              </button>
+            `;
+          })
+          .join('');
+
+        container.querySelectorAll('.site-card-btn').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            selectLandingSite(btn.dataset.siteId);
+          });
+        });
+      }
+
+      function updateDashboard() {
+        const site = getActiveSite();
+        const simDate = getCurrentSimDate();
+        const tel = computeSiteTelemetry(site, simDate);
+
+        // Update Top Clock & Date
+        const hh = String(simDate.getUTCHours()).padStart(2, '0');
+        const mm = String(simDate.getUTCMinutes()).padStart(2, '0');
+        const ss = String(simDate.getUTCSeconds()).padStart(2, '0');
+        document.getElementById('lstClock').textContent = `${hh}:${mm}:${ss}`;
+        document.getElementById('lstDateLabel').textContent = simDate.toLocaleDateString('en-US', {
+          month: 'short',
+          day: '2-digit',
+          year: 'numeric',
+          timeZone: 'UTC',
+        });
+
+        // Mission Overview Metrics
+        document.getElementById('overviewDistance').textContent = `${tel.earthMoonDistanceKm.toLocaleString()} km`;
+        const travelDays = (tel.earthMoonDistanceKm / 120125).toFixed(1);
+        document.getElementById('overviewTravelTime').textContent = `${travelDays} days`;
+
+        // Environment Metrics
+        const sunSign = tel.sunElevation >= 0 ? '+' : '';
+        const earthSign = tel.earthElevation >= 0 ? '+' : '';
+        document.getElementById('envSunElev').textContent = `${sunSign}${tel.sunElevation.toFixed(1)}°`;
+        document.getElementById('envEarthElev').textContent = `${earthSign}${tel.earthElevation.toFixed(1)}°`;
+        document.getElementById('envSunlightPct').textContent = `${tel.sunlightPct}%`;
+        document.getElementById('envEarthVisPct').textContent = `${tel.earthVisPct}%`;
+
+        document.getElementById('sunsetCountdown').textContent = tel.sunVisible
+          ? formatDurationHours(tel.hoursToSunset)
+          : 'In Shadow';
+        document.getElementById('earthsetCountdown').textContent = tel.earthVisible
+          ? formatDurationHours(tel.hoursToEarthset)
+          : 'Occluded';
+
+        const losBadge = document.getElementById('horizonStatusBadge');
+        if (tel.sunVisible && tel.earthVisible) {
+          losBadge.textContent = 'SUN + DTE ACTIVE';
+          losBadge.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30';
+        } else if (tel.sunVisible) {
+          losBadge.textContent = 'SUNLIGHT ONLY';
+          losBadge.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30';
+        } else {
+          losBadge.textContent = 'LUNAR NIGHT';
+          losBadge.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30';
+        }
+
+        // Center Floating Callout & Full-Screen 3D HUD Bar & Coordinate Inputs
+        document.getElementById('calloutSiteName').textContent = site.name;
+        document.getElementById('calloutCoords').textContent = formatCoords(site.lat, site.lon);
+        document.getElementById('calloutScore').textContent = `${tel.viabilityScore.toFixed(1)}%`;
+        document.getElementById('hud3dSiteName').textContent = site.name;
+        document.getElementById('hud3dScore').textContent = `${tel.viabilityScore.toFixed(1)}%`;
+        document.getElementById('hud3dCoords').textContent = `${formatCoords(site.lat, site.lon)} · LOLA Elev: ${site.elevationM >= 0 ? '+' : ''}${site.elevationM}m · Drag 360° · Scroll Zoom`;
+        document.getElementById('inputLat').value = site.lat.toFixed(1);
+        document.getElementById('inputLon').value = site.lon.toFixed(1);
+
+        // Right Real-Time Telemetry
+        document.getElementById('telAltitude').textContent = `${tel.earthMoonDistanceKm.toLocaleString()} km`;
+        document.getElementById('telVelocity').textContent = `${tel.orbitalVelocityKms} km/s`;
+        document.getElementById('telLatLon').textContent = formatCoords(site.lat, site.lon);
+        document.getElementById('telElevation').textContent = `${site.elevationM >= 0 ? '+' : ''}${site.elevationM.toLocaleString()} m`;
+
+        // Render Charts
+        renderHorizonSparkline(site, tel);
+        renderIlluminationChart(site, tel);
+        renderSiteComparisonCards(simDate);
+
+        // Mission Advisor Dynamic Diagnosis
+        updateMissionAdvisor(site, tel);
+
+        // Simulation Phase Label
+        const dayInCycle = ((state.simOffsetHours / 24) % SYNODIC_DAYS).toFixed(1);
+        document.getElementById('simPhaseLabel').textContent = `Day ${dayInCycle} / 29.5d`;
+        document.getElementById('lunarCycleSlider').value = Math.round(state.simOffsetHours % SYNODIC_HOURS);
+
+        // Update 3D Sunlight & Earth Geometry in Three.js Scene
+        if (sunLight && earthMesh) {
+          const sunDir = latLonToVector3(tel.subsolarLat, tel.subsolarLon, 6.0);
+          sunLight.position.copy(sunDir);
+
+          const earthDir = latLonToVector3(tel.earthSubLat, tel.earthSubLon, 4.6);
+          earthMesh.position.set(earthDir.x + 1.4, earthDir.y + 0.9, -3.4);
+        }
+      }
+
+      function updateMissionAdvisor(site, tel) {
+        const headlineEl = document.getElementById('advisorHeadline');
+        const summaryEl = document.getElementById('advisorSummary');
+        const iconEl = document.getElementById('advisorStatusIcon');
+        const scoreValEl = document.getElementById('advisorScoreValue');
+        const circleEl = document.getElementById('advisorScoreCircle');
+
+        scoreValEl.textContent = `${tel.viabilityScore.toFixed(1)}%`;
+        const circumference = 251.2;
+        const offset = circumference - (tel.viabilityScore / 100) * circumference;
+        circleEl.style.strokeDashoffset = offset.toFixed(1);
+
+        if (tel.viabilityScore >= 82 && tel.sunVisible && tel.earthVisible) {
+          iconEl.textContent = '✓';
+          iconEl.className = 'w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-400 text-emerald-300 flex items-center justify-center text-xs shrink-0 mt-0.5';
+          headlineEl.textContent = `${site.name} is an optimal landing site.`;
+          headlineEl.className = 'text-xs sm:text-sm font-bold text-emerald-300 leading-snug';
+          summaryEl.textContent = `High solar availability (${tel.sunlightPct}%), clear direct-to-Earth visibility (${tel.earthVisPct}%), and safe ${site.slopeDeg}° landing slope.`;
+        } else if (tel.viabilityScore >= 60) {
+          iconEl.textContent = '!';
+          iconEl.className = 'w-5 h-5 rounded-full bg-amber-500/20 border border-amber-400 text-amber-300 flex items-center justify-center text-xs shrink-0 mt-0.5';
+          headlineEl.textContent = `${site.name} has conditional operational windows.`;
+          headlineEl.className = 'text-xs sm:text-sm font-bold text-amber-300 leading-snug';
+          summaryEl.textContent = !tel.sunVisible
+            ? `Currently shadowed by local crater rim (${tel.sunHorizonAngle.toFixed(1)}° mask). Advance simulation timeline or verify battery thermal survival.`
+            : `Partial horizon obstruction reduces continuous DTE comms to ${tel.earthVisPct}%. Relay orbiter recommended during libration dips.`;
+        } else {
+          iconEl.textContent = '✕';
+          iconEl.className = 'w-5 h-5 rounded-full bg-rose-500/20 border border-rose-400 text-rose-300 flex items-center justify-center text-xs shrink-0 mt-0.5';
+          headlineEl.textContent = `High mission risk at ${site.name} for selected epoch.`;
+          headlineEl.className = 'text-xs sm:text-sm font-bold text-rose-300 leading-snug';
+          summaryEl.textContent = `Severe terrain shadowing or Earth occlusion (${tel.earthVisPct}% DTE). Consider shifting landing epoch or selecting Shackleton/Malapert.`;
+        }
+      }
+
+      // =========================================================================
+      // 9. SITE SELECTION & INTERACTIVE MODALS
+      // =========================================================================
+      function selectLandingSite(siteId) {
+        state.selectedSiteId = siteId;
+        state.customSite = null;
+        const site = getActiveSite();
+        rebuildSiteBeacons();
+        focusCameraOnSite(site);
+        updateDashboard();
+      }
+
+      function setCustomLandingCoordinates(lat, lon) {
+        const clampedLat = Math.max(-90, Math.min(90, lat));
+        const clampedLon = Math.max(-180, Math.min(180, lon));
+
+        const polarFactor = Math.abs(clampedLat) / 90;
+        const synthElevation = Math.round(
+          Math.sin(clampedLat * 0.25) * 1400 + Math.cos(clampedLon * 0.18) * 950 + polarFactor * 600
+        );
+        const synthSlope = parseFloat((2.5 + Math.abs(Math.sin(clampedLat + clampedLon)) * 6.5).toFixed(1));
+        const synthMask = Array.from({ length: 12 }, (_, i) =>
+          parseFloat((0.4 + polarFactor * 1.4 + Math.sin(i * 0.9 + clampedLon) * 1.1).toFixed(1))
+        );
+
+        state.customSite = {
+          id: 'custom-target',
+          name: 'Custom LOLA Target',
+          shortName: 'Custom',
+          region: `Selenographic Grid (${formatCoords(clampedLat, clampedLon)})`,
+          lat: clampedLat,
+          lon: clampedLon,
+          elevationM: synthElevation,
+          slopeDeg: synthSlope,
+          iceProximityKm: parseFloat((Math.max(1.2, (90 - Math.abs(clampedLat)) * 3.8)).toFixed(1)),
+          horizonMask: synthMask,
+          missionTag: 'User Sampled Coordinate',
+          notes: 'Dynamically sampled point using LOLA spherical harmonic terrain model and real-time Sun/Earth horizon ray-masking.',
+        };
+
+        rebuildSiteBeacons();
+        focusCameraOnSite(state.customSite);
+        updateDashboard();
+      }
+
+      function openModal(title, htmlContent) {
+        document.getElementById('modalTitle').textContent = title;
+        document.getElementById('modalBody').innerHTML = htmlContent;
+        const backdrop = document.getElementById('modalBackdrop');
+        backdrop.classList.remove('hidden');
+        backdrop.classList.add('flex');
+      }
+
+      function closeModal() {
+        const backdrop = document.getElementById('modalBackdrop');
+        backdrop.classList.add('hidden');
+        backdrop.classList.remove('flex');
+      }
+
+      function showAllSitesComparisonModal() {
+        const simDate = getCurrentSimDate();
+        const rows = LANDING_SITES.map((s) => {
+          const t = computeSiteTelemetry(s, simDate);
+          return `
+            <tr class="border-b border-cyan-500/15 hover:bg-cyan-500/10 transition">
+              <td class="py-2.5 px-2 font-semibold text-white">
+                ${s.name}
+                <div class="text-[10px] font-mono text-cyan-300">${s.missionTag}</div>
+              </td>
+              <td class="py-2.5 px-2 font-mono text-slate-300">${formatCoords(s.lat, s.lon)}</td>
+              <td class="py-2.5 px-2 font-mono text-amber-300">${t.sunElevation >= 0 ? '+' : ''}${t.sunElevation.toFixed(1)}° (${t.sunlightPct}%)</td>
+              <td class="py-2.5 px-2 font-mono text-sky-300">${t.earthElevation >= 0 ? '+' : ''}${t.earthElevation.toFixed(1)}° (${t.earthVisPct}%)</td>
+              <td class="py-2.5 px-2 font-mono text-slate-200">${s.elevationM} m / ${s.slopeDeg}°</td>
+              <td class="py-2.5 px-2 font-mono font-bold text-emerald-400">${t.viabilityScore.toFixed(1)}%</td>
+              <td class="py-2.5 px-2 text-right">
+                <button onclick="window.__selectSiteFromModal('${s.id}')" class="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-400/50 text-[11px] font-mono text-cyan-100">
+                  Select
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        openModal(
+          'Candidate Lunar Landing Sites — Side-by-Side Trade-Off Matrix',
+          `
+          <p class="text-slate-300 text-xs mb-3">
+            Real-time comparative evaluation at <strong class="text-cyan-200 font-mono">${simDate.toUTCString()}</strong> accounting for LOLA crater rim horizon obstructions and Earth libration.
+          </p>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="border-b border-cyan-400/30 text-[10px] font-mono uppercase text-cyan-300">
+                  <th class="py-2 px-2">Site / Program</th>
+                  <th class="py-2 px-2">Coordinates</th>
+                  <th class="py-2 px-2">Sun (Cycle %)</th>
+                  <th class="py-2 px-2">Earth DTE (%)</th>
+                  <th class="py-2 px-2">Elev / Slope</th>
+                  <th class="py-2 px-2">Score</th>
+                  <th class="py-2 px-2 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          `
+        );
+      }
+
+      function showAdvisorDetailsModal() {
+        const site = getActiveSite();
+        const simDate = getCurrentSimDate();
+        const tel = computeSiteTelemetry(site, simDate);
+
+        const delayedDate = new Date(simDate.getTime() + 14 * 86400 * 1000);
+        const delayedTel = computeSiteTelemetry(site, delayedDate);
+
+        openModal(
+          `Mission Feasibility Deep-Dive — ${site.name}`,
+          `
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="bg-space-950/80 p-3 rounded-xl border border-cyan-500/25">
+              <div class="text-[10px] font-mono text-slate-400 uppercase">Overall Viability</div>
+              <div class="text-2xl font-mono font-bold text-emerald-400 mt-1">${tel.viabilityScore.toFixed(1)}%</div>
+              <div class="text-[11px] text-slate-300 mt-1">${site.region}</div>
+            </div>
+            <div class="bg-space-950/80 p-3 rounded-xl border border-amber-500/25">
+              <div class="text-[10px] font-mono text-slate-400 uppercase">Power & Thermal Window</div>
+              <div class="text-lg font-mono font-bold text-amber-300 mt-1">${tel.sunlightPct}% Lunar Day</div>
+              <div class="text-[11px] text-slate-300 mt-1">Sun: ${tel.sunElevation.toFixed(1)}° vs Rim Mask: ${tel.sunHorizonAngle.toFixed(1)}°</div>
+            </div>
+            <div class="bg-space-950/80 p-3 rounded-xl border border-sky-500/25">
+              <div class="text-[10px] font-mono text-slate-400 uppercase">Direct-to-Earth Comms</div>
+              <div class="text-lg font-mono font-bold text-sky-300 mt-1">${tel.earthVisPct}% Visibility</div>
+              <div class="text-[11px] text-slate-300 mt-1">Earth: ${tel.earthElevation.toFixed(1)}° vs Rim Mask: ${tel.earthHorizonAngle.toFixed(1)}°</div>
+            </div>
+          </div>
+
+          <div class="bg-space-950/70 p-3.5 rounded-xl border border-cyan-500/20 space-y-2">
+            <h4 class="font-bold text-cyan-200 uppercase text-xs tracking-wider">Engineering & Science Assessment</h4>
+            <p class="text-slate-300 leading-relaxed">${site.notes}</p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 text-[11px] font-mono">
+              <div><span class="text-slate-400">LOLA Elev:</span> <span class="text-white">${site.elevationM} m</span></div>
+              <div><span class="text-slate-400">Mean Slope:</span> <span class="text-white">${site.slopeDeg}°</span></div>
+              <div><span class="text-slate-400">PSR Ice Dist:</span> <span class="text-cyan-300">${site.iceProximityKm} km</span></div>
+              <div><span class="text-slate-400">Next Sunset:</span> <span class="text-amber-300">${formatDurationHours(tel.hoursToSunset)}</span></div>
+            </div>
+          </div>
+
+          <div class="bg-amber-950/25 p-3.5 rounded-xl border border-amber-400/30">
+            <h4 class="font-bold text-amber-300 uppercase text-xs tracking-wider mb-1">Schedule Slip Sensitivity (+14 Day Launch Delay)</h4>
+            <p class="text-xs text-slate-200">
+              If launch slips 14 days to <span class="font-mono text-amber-200">${delayedDate.toUTCString()}</span>, Sun elevation shifts to
+              <strong class="font-mono">${delayedTel.sunElevation >= 0 ? '+' : ''}${delayedTel.sunElevation.toFixed(1)}°</strong> (${delayedTel.sunVisible ? 'Illuminated' : 'Shadowed'})
+              and Earth elevation shifts to <strong class="font-mono">${delayedTel.earthElevation >= 0 ? '+' : ''}${delayedTel.earthElevation.toFixed(1)}°</strong>
+              (Viability Score: <strong class="font-mono text-cyan-300">${delayedTel.viabilityScore.toFixed(1)}%</strong>).
+            </p>
+          </div>
+          `
+        );
+      }
+
+      function showNasaResourcesModal() {
+        openModal(
+          'Lunar Mapping WMTS & Ephemeris Data Architecture',
+          `
+          <p class="text-slate-300 leading-relaxed">
+            <strong>TENET — Lunar Mission Navigator</strong> integrates official planetary data services and selenocentric celestial mechanics to bridge complex orbital analysis and agile mission planning:
+          </p>
+          <div class="space-y-2.5 font-mono text-[11px]">
+            <div class="bg-space-950/85 p-3 rounded-xl border border-cyan-500/25">
+              <div class="text-cyan-300 font-bold mb-1">1. Lunar Mapping WMTS Global Imagery Layer</div>
+              <div class="text-slate-400 break-all">https://trek.nasa.gov/tiles/Moon/EQ/LRO_WAC_Mosaic_Global_303ppd_v02/1.0.0/default/default028mm/{z}/{y}/{x}.jpg</div>
+              <div class="text-slate-300 font-sans mt-1">Lunar Reconnaissance Orbiter (LRO) Wide Angle Camera (WAC) 100m/pixel global basemap composited directly onto the 3D WebGL Moon sphere.</div>
+            </div>
+
+            <div class="bg-space-950/85 p-3 rounded-xl border border-cyan-500/25">
+              <div class="text-cyan-300 font-bold mb-1">2. Lunar Orbiter Laser Altimeter (LOLA) South Pole DEM</div>
+              <div class="text-slate-400">Dataset: LRO_LOLA_DEM_SouthPole_5m / 360° Azimuthal Horizon Elevation Masks</div>
+              <div class="text-slate-300 font-sans mt-1">Because the Moon lacks an atmosphere (zero optical refraction), TENET evaluates visibility strictly via <code class="text-cyan-200">Elevation_target(az) &gt; Elevation_terrain(az)</code>.</div>
+            </div>
+
+            <div class="bg-space-950/85 p-3 rounded-xl border border-cyan-500/25">
+              <div class="text-cyan-300 font-bold mb-1">3. JPL Horizons Selenocentric Ephemeris & Libration Model</div>
+              <div class="text-slate-300 font-sans">Models the 29.530589-day synodic solar cycle, 1.54° lunar axial obliquity, ±7.89° longitudinal optical libration, ±6.68° latitudinal libration, and orbital eccentricity (363,300–405,500 km).</div>
+            </div>
+          </div>
+          `
+        );
+      }
+
+      window.__selectSiteFromModal = function (siteId) {
+        closeModal();
+        selectLandingSite(siteId);
+      };
+
+      // =========================================================================
+      // 10. EVENT LISTENERS & MAIN ANIMATION LOOP
+      // =========================================================================
+      function bindUiEvents() {
+        // Top Navigation Tabs
+        document.querySelectorAll('.top-nav-btn').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const tab = btn.dataset.tab;
+            if (tab === 'mission-control') {
+              exitFull3dMapMode();
+            } else if (tab === '3d-map') {
+              enterFull3dMapMode();
+            } else if (tab === 'analysis') {
+              setActiveTopTabPill('analysis');
+              showAdvisorDetailsModal();
+            } else if (tab === 'planning') {
+              setActiveTopTabPill('planning');
+              showAllSitesComparisonModal();
+            } else if (tab === 'resources') {
+              setActiveTopTabPill('resources');
+              showNasaResourcesModal();
+            }
+          });
+        });
+
+        // Full-Screen 3D Map HUD Bar Controls
+        document.getElementById('btnExit3dMap').addEventListener('click', exitFull3dMapMode);
+        document.getElementById('btnExpand3dHint').addEventListener('click', enterFull3dMapMode);
+
+        document.getElementById('btn3dZoomIn').addEventListener('click', () => {
+          targetCameraSpherical.radius = Math.max(1.45, targetCameraSpherical.radius - 0.35);
+        });
+        document.getElementById('btn3dZoomOut').addEventListener('click', () => {
+          targetCameraSpherical.radius = Math.min(6.5, targetCameraSpherical.radius + 0.35);
+        });
+
+        document.querySelectorAll('.cam-preset-btn').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const preset = btn.dataset.camPreset;
+            if (preset === 'south-pole') {
+              targetCameraSpherical = { radius: 2.55, theta: 0.12, phi: 2.75 };
+            } else if (preset === 'north-pole') {
+              targetCameraSpherical = { radius: 2.55, theta: 0.12, phi: 0.38 };
+            } else if (preset === 'near-side') {
+              targetCameraSpherical = { radius: 2.65, theta: Math.PI / 2, phi: Math.PI / 2 };
+            } else if (preset === 'far-side') {
+              targetCameraSpherical = { radius: 2.65, theta: -Math.PI / 2, phi: Math.PI / 2 };
+            }
+          });
+        });
+
+        // Left Vertical Navigation Rail
+        document.querySelectorAll('.side-nav-btn').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            document.querySelectorAll('.side-nav-btn').forEach((b) => {
+              b.classList.remove('side-btn-active');
+              b.classList.add('text-slate-400');
+            });
+            btn.classList.add('side-btn-active');
+            btn.classList.remove('text-slate-400');
+
+            const side = btn.dataset.side;
+            if (side === 'sites') showAllSitesComparisonModal();
+            else if (side === 'advisor' || side === 'calculations') showAdvisorDetailsModal();
+            else if (side === 'resources') showNasaResourcesModal();
+          });
+        });
+
+        // Custom Lat/Lon Coordinate Form
+        document.getElementById('customCoordForm').addEventListener('submit', (e) => {
+          e.preventDefault();
+          const lat = parseFloat(document.getElementById('inputLat').value);
+          const lon = parseFloat(document.getElementById('inputLon').value);
+          if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
+            setCustomLandingCoordinates(lat, lon);
+          }
+        });
+
+        // Target Date Input
+        document.getElementById('missionDateInput').addEventListener('change', (e) => {
+          if (e.target.value) {
+            state.baseDate = new Date(`${e.target.value}T12:00:00Z`);
+            updateDashboard();
+          }
+        });
+
+        // Camera Zoom & South Pole Reset (Mission Control view)
+        document.getElementById('btnZoomIn').addEventListener('click', () => {
+          targetCameraSpherical.radius = Math.max(1.45, targetCameraSpherical.radius - 0.35);
+        });
+        document.getElementById('btnZoomOut').addEventListener('click', () => {
+          targetCameraSpherical.radius = Math.min(6.5, targetCameraSpherical.radius + 0.35);
+        });
+        document.getElementById('btnFocusPole').addEventListener('click', () => {
+          targetCameraSpherical = { radius: 4.6, theta: 0.1, phi: 2.75 };
+        });
+
+        // Simulation Playback Controls
+        const playBtn = document.getElementById('btnSimPlayPause');
+        playBtn.addEventListener('click', () => {
+          state.isPlaying = !state.isPlaying;
+          playBtn.textContent = state.isPlaying ? '⏸' : '▶';
+        });
+
+        document.getElementById('btnSimRewind').addEventListener('click', () => {
+          state.simOffsetHours = (state.simOffsetHours - 12 + SYNODIC_HOURS) % SYNODIC_HOURS;
+          updateDashboard();
+        });
+
+        document.getElementById('btnSimForward').addEventListener('click', () => {
+          state.simOffsetHours = (state.simOffsetHours + 12) % SYNODIC_HOURS;
+          updateDashboard();
+        });
+
+        document.getElementById('lunarCycleSlider').addEventListener('input', (e) => {
+          state.simOffsetHours = parseFloat(e.target.value);
+          updateDashboard();
+        });
+
+        document.getElementById('simSpeedSelect').addEventListener('change', (e) => {
+          state.simSpeed = parseFloat(e.target.value);
+        });
+
+        // +14d Launch Delay Quick Test
+        document.getElementById('btnTestDelay').addEventListener('click', () => {
+          state.simOffsetHours = (state.simOffsetHours + 14 * 24) % SYNODIC_HOURS;
+          updateDashboard();
+        });
+
+        // Modals
+        document.getElementById('btnViewAllSites').addEventListener('click', showAllSitesComparisonModal);
+        document.getElementById('btnAdvisorDetails').addEventListener('click', showAdvisorDetailsModal);
+        document.getElementById('btnCloseModal').addEventListener('click', () => {
+          closeModal();
+          setActiveTopTabPill(state.is3dMapMode ? '3d-map' : 'mission-control');
+        });
+        document.getElementById('modalBackdrop').addEventListener('click', (e) => {
+          if (e.target.id === 'modalBackdrop') {
+            closeModal();
+            setActiveTopTabPill(state.is3dMapMode ? '3d-map' : 'mission-control');
+          }
+        });
+
+        // ESC key returns from modal or 3D Map mode
+        window.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            const backdrop = document.getElementById('modalBackdrop');
+            if (!backdrop.classList.contains('hidden')) {
+              closeModal();
+              setActiveTopTabPill(state.is3dMapMode ? '3d-map' : 'mission-control');
+            } else if (state.is3dMapMode) {
+              exitFull3dMapMode();
+            }
+          }
+        });
+
+        // Expert / Public Mode Toggle
+        document.getElementById('expertModeToggle').addEventListener('click', (e) => {
+          state.expertMode = !state.expertMode;
+          e.target.textContent = state.expertMode ? 'EXPERT' : 'PUBLIC';
+          document.getElementById('missionModeLabel').textContent = state.expertMode
+            ? 'Autonomous CLPS'
+            : 'Guided Explorer';
+        });
+      }
+
+      let lastFrameTime = performance.now();
+      let uiThrottleTimer = 0;
+
+      function animate(now) {
+        requestAnimationFrame(animate);
+        const dtSec = Math.min(0.1, (now - lastFrameTime) / 1000);
+        lastFrameTime = now;
+
+        currentCameraSpherical.radius += (targetCameraSpherical.radius - currentCameraSpherical.radius) * 0.1;
+        currentCameraSpherical.theta += (targetCameraSpherical.theta - currentCameraSpherical.theta) * 0.1;
+        currentCameraSpherical.phi += (targetCameraSpherical.phi - currentCameraSpherical.phi) * 0.1;
+        updateCameraPositionFromSpherical();
+
+        if (ringGroup) ringGroup.rotation.z += dtSec * 0.04;
+        if (earthMesh) earthMesh.rotation.y += dtSec * 0.08;
+
+        if (state.isPlaying) {
+          state.simOffsetHours = (state.simOffsetHours + (dtSec * state.simSpeed) / 3600) % SYNODIC_HOURS;
+          uiThrottleTimer += dtSec;
+          if (uiThrottleTimer >= 0.08) {
+            uiThrottleTimer = 0;
+            updateDashboard();
+          }
+        }
+
+        renderWireframeTerrain(getActiveSite());
+
+        if (renderer && scene && camera) {
+          renderer.render(scene, camera);
+        }
+      }
+
+      window.onload = function () {
+        initThreeJsMoon();
+        initWireframeTerrain();
+        bindUiEvents();
+        updateDashboard();
+        requestAnimationFrame(animate);
+      };
+    })();
+  </script>
+</body>
+</html>
